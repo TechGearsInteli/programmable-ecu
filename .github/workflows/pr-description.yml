@@ -1,0 +1,132 @@
+name: Auto PR Description
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  fill-description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build PR description
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          ORG: TechGearsInteli
+          PROJECT_NUMBER: 1
+          REPO: ${{ github.repository }}
+        run: |
+          # Fetch commits on this branch
+          COMMITS=$(git log "$BASE_SHA..$HEAD_SHA" --pretty=format:"- %s" | head -30)
+
+          # Fetch tasks assigned to the PR author in "Fazendo" (In Progress) status
+          TASKS=$(gh api graphql -f query='
+          {
+            organization(login: "'"$ORG"'") {
+              projectV2(number: '"$PROJECT_NUMBER"') {
+                items(first: 50) {
+                  nodes {
+                    content {
+                      ... on Issue {
+                        number
+                        title
+                        url
+                        assignees(first: 5) { nodes { login } }
+                      }
+                    }
+                    fieldValues(first: 10) {
+                      nodes {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                          name
+                          field { ... on ProjectV2SingleSelectField { name } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }' | python3 -c "
+          import json, sys, os
+          data = json.load(sys.stdin)
+          author = os.environ['AUTHOR_LOGIN'].lower()
+          items = data['data']['organization']['projectV2']['items']['nodes']
+          tasks = []
+          for item in items:
+            content = item.get('content') or {}
+            assignees = [a['login'].lower() for a in content.get('assignees', {}).get('nodes', [])]
+            if author not in assignees:
+              continue
+            status = ''
+            for fv in (item.get('fieldValues') or {}).get('nodes', []):
+              if fv and (fv.get('field') or {}).get('name') == 'Status':
+                status = fv.get('name', '')
+            if 'fazendo' in status.lower() or 'doing' in status.lower() or 'in progress' in status.lower():
+              tasks.append('- [#%s %s](%s)' % (content.get('number',''), content.get('title',''), content.get('url','')))
+          print('\n'.join(tasks) if tasks else '_Nenhuma task em andamento encontrada no projeto._')
+          " 2>/dev/null || echo "_Não foi possível consultar o GitHub Projects._")
+
+          # Build the body using a heredoc to a file to avoid quoting issues
+          cat > /tmp/pr_body.md << 'PREOF'
+          ## Título da PR
+
+          - **Branch:** BRANCH_PLACEHOLDER
+
+          - **Tasks relacionadas:**
+
+          TASKS_PLACEHOLDER
+
+          - **Commits:**
+
+          COMMITS_PLACEHOLDER
+
+          - **Descrição do PR:**
+            _Faça uma descrição detalhada do que essa PR faz e por que as alterações feitas nela são necessárias, além de justificar a escolha de cada uma das realizações de maneira clara_
+
+          - **Revisor(a):**
+            _Liste aqui o(s) revisores da sua PR_
+
+          - **Teste:**
+            _Liste aqui, caso houver, como testar a sua alteração._
+
+          - **Documentação:**
+            _Descreva aqui o que foi realizado na documentação do projeto_
+
+          - **Colaboradores:**
+            - _Liste aqui os colaboradores em forma de tópicos e mencione-os com o `@usuario`_
+          PREOF
+
+          # Replace placeholders
+          python3 - << PYEOF
+          with open('/tmp/pr_body.md') as f:
+            body = f.read()
+
+          import os
+          body = body.replace('BRANCH_PLACEHOLDER', os.environ['BRANCH'])
+          body = body.replace('TASKS_PLACEHOLDER', """$TASKS""")
+          body = body.replace('COMMITS_PLACEHOLDER', """$COMMITS""")
+
+          with open('/tmp/pr_body_final.md', 'w') as f:
+            f.write(body)
+          PYEOF
+
+      - name: Update PR description
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --body "$(cat /tmp/pr_body_final.md)"

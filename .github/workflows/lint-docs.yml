@@ -1,0 +1,33 @@
+name: Lint Docs
+
+on:
+  pull_request:
+    paths:
+      - 'docs-site/docs/**/*.md'
+      - 'docs-site/docs/**/*.mdx'
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Get changed docs files
+        id: changed
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+          FILES=$(git diff --name-only --diff-filter=AM "$BASE...$HEAD" -- \
+            'docs-site/docs/*.md' 'docs-site/docs/**/*.md' \
+            'docs-site/docs/*.mdx' 'docs-site/docs/**/*.mdx' | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Check documentation standard
+        if: steps.changed.outputs.files != ''
+        run: node scripts/check-docs.js ${{ steps.changed.outputs.files }}
