@@ -1,0 +1,107 @@
+@import url("https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap");
+
+/* TechGears Identity — dark theme with red accent */
+
+:root {
+  --tg-red: #f83038;
+  --tg-red-dark: #d01f26;
+  --tg-red-darker: #b51b21;
+  --tg-red-light: #fa5860;
+  --tg-red-lighter: #fb7078;
+  --tg-bg: #222222;
+  --tg-bg-dark: #1c1c1c;
+  --tg-bg-card: #2f2f2f;
+
+  /* Docusaurus primary = TechGears red */
+  --ifm-color-primary: var(--tg-red);
+  --ifm-color-primary-dark: var(--tg-red-dark);
+  --ifm-color-primary-darker: var(--tg-red-darker);
+  --ifm-color-primary-darkest: #8f1418;
+  --ifm-color-primary-light: var(--tg-red-light);
+  --ifm-color-primary-lighter: var(--tg-red-lighter);
+  --ifm-color-primary-lightest: #fc9099;
+
+  --ifm-font-family-base: "Ubuntu", sans-serif;
+  --ifm-heading-font-family: "Ubuntu", sans-serif;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(248, 48, 56, 0.15);
+}
+
+/* Force dark mode to match TechGears site */
+[data-theme='dark'] {
+  --ifm-color-primary: var(--tg-red);
+  --ifm-color-primary-dark: var(--tg-red-dark);
+  --ifm-color-primary-darker: var(--tg-red-darker);
+  --ifm-color-primary-darkest: #8f1418;
+  --ifm-color-primary-light: var(--tg-red-light);
+  --ifm-color-primary-lighter: var(--tg-red-lighter);
+  --ifm-color-primary-lightest: #fc9099;
+
+  --ifm-background-color: var(--tg-bg);
+  --ifm-background-surface-color: var(--tg-bg-card);
+  --ifm-navbar-background-color: var(--tg-bg-dark);
+  --ifm-footer-background-color: var(--tg-bg-dark);
+  --ifm-toc-border-color: rgba(248, 48, 56, 0.3);
+  --docusaurus-highlighted-code-line-bg: rgba(248, 48, 56, 0.2);
+}
+
+/* Navbar */
+.navbar {
+  border-bottom: 2px solid var(--tg-red);
+}
+
+/* Hero / custom landing section */
+.hero--techgears {
+  background: linear-gradient(135deg, #1c1c1c 0%, #2f2f2f 100%);
+  padding: 4rem 2rem;
+  text-align: center;
+  border-bottom: 3px solid var(--tg-red);
+}
+
+.hero--techgears .hero__title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.hero--techgears .hero__title span {
+  color: var(--tg-red);
+}
+
+.hero--techgears .hero__subtitle {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.2rem;
+  font-weight: 300;
+  max-width: 640px;
+  margin: 0 auto 2rem;
+}
+
+.hero--techgears .button--primary {
+  background-color: var(--tg-red);
+  border-color: var(--tg-red);
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.hero--techgears .button--primary:hover {
+  background-color: var(--tg-red-dark);
+  border-color: var(--tg-red-dark);
+}
+
+/* Cards on home page */
+.features-section {
+  background: var(--tg-bg);
+  padding: 3rem 2rem;
+}
+
+.feature-card {
+  background: var(--tg-bg-card);
+  border-radius: 8px;
+  padding: 1.5rem;
+  border-left: 4px solid var(--tg-red);
+}
+
+.feature-card h3 {
+  color: var(--tg-red);
+  margin-bottom: 0.5rem;
+}
