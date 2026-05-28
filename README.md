@@ -13,12 +13,12 @@ programmable-ecu/
 ├── firmware/      # Código do microcontrolador (C/C++ com PlatformIO)
 ├── hardware/      # Esquemáticos, PCB, diagramas de blocos
 ├── calibration/   # Mapas de calibração (.json / .msq)
-└── docs/          # Documentação técnica e site Docusaurus
+└── docs-site/     # Site de documentação (Docusaurus) → docs.techgears.app/programmable-ecu/
 ```
 
 ## Como participar
 
-1. Leia a documentação em `docs/` ou acesse o site em https://techgearsinteli.github.io/programmable-ecu
+1. Acesse a documentação em https://docs.techgears.app/programmable-ecu
 2. Veja as issues abertas no [GitHub Projects — DevGears](https://github.com/orgs/TechGearsInteli/projects/1)
 3. Escolha uma task no Sprint Backlog, se auto-atribua e mova para "Fazendo"
 4. Crie uma branch com o padrão `feat/1.X.X.X-descricao` ou `fix/descricao`
@@ -27,8 +27,8 @@ programmable-ecu/
 ## Requisitos de ambiente
 
 - [PlatformIO](https://platformio.org/) para compilar e flashar o firmware
-- [Node.js 18+](https://nodejs.org/) para rodar o site de documentação
-- Microcontrolador: ESP32 (decisão em `docs/decisoes/`)
+- [Node.js 18+](https://nodejs.org/) para rodar o site de documentação localmente (`cd docs-site && npm start`)
+- Microcontrolador: ESP32
 
 ## Licença
 
