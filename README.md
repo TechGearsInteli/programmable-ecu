@@ -64,40 +64,6 @@ O site abre em `http://localhost:3000/programmable-ecu/`.
 
 ---
 
-## Como contribuir
-
-### 1. Escolha uma task
-
-Acesse o [GitHub Projects](https://github.com/orgs/TechGearsInteli/projects/1), escolha uma task no **Sprint Backlog**, se auto-atribua e mova para **Fazendo**.
-
-### 2. Crie uma branch
-
-```bash
-git checkout -b feat/1.X.X.X-descricao-curta
-# ou
-git checkout -b fix/descricao-do-bug
-```
-
-### 3. Implemente e documente
-
-- Siga o padrão de código do firmware descrito em `docs-site/docs/`
-- Se criar ou editar arquivos `.md` em `docs-site/docs/`, siga o [Guia de Documentação](https://docs.techgears.app/guia)
-- O lint de documentação roda automaticamente em todo PR
-
-### 4. Abra um Pull Request
-
-Use o template de PR disponível em `.github/pull_request_template.md`. Descreva o que foi feito, por que foi necessário e como testar.
-
-### Padrão de branches
-
-| Prefixo | Uso |
-|---------|-----|
-| `feat/` | Nova funcionalidade ou entrega de task |
-| `fix/` | Correção de bug |
-| `docs/` | Apenas documentação |
-| `refactor/` | Refatoração sem mudança de comportamento |
-| `ci/` | Mudanças em workflows e scripts de CI |
-
 ---
 
 ## Pipelines de CI
