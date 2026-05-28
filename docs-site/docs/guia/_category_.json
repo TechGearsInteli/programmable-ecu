@@ -1,0 +1,10 @@
+{
+  "label": "Guia de Uso",
+  "position": 2,
+  "collapsible": true,
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "description": "Guia para contribuidores: como escrever documentação, rodar o projeto localmente e entender o pipeline de CI."
+  }
+}
