@@ -1,4 +1,4 @@
-# Programmable ECU — TechGears Inteli
+# Programmable ECU
 
 ECU (Electronic Control Unit) programável para motores de combustão interna de 4 cilindros. O projeto controla injeção de combustível e ignição via microcontrolador, com interface de calibração web e telemetria em tempo real.
 
@@ -19,7 +19,7 @@ programmable-ecu/
 ## Como participar
 
 1. Acesse a documentação em https://docs.techgears.app/programmable-ecu
-2. Veja as issues abertas no [GitHub Projects — DevGears](https://github.com/orgs/TechGearsInteli/projects/1)
+2. Veja as issues abertas no [GitHub Projects](https://github.com/orgs/TechGearsInteli/projects/1)
 3. Escolha uma task no Sprint Backlog, se auto-atribua e mova para "Fazendo"
 4. Crie uma branch com o padrão `feat/1.X.X.X-descricao` ou `fix/descricao`
 5. Abra um Pull Request para `main` descrevendo o que foi feito e por quê

@@ -58,10 +58,12 @@ const config: Config = {
       respectPrefersColorScheme: false,
     },
     navbar: {
-      title: 'Programmable ECU',
+      title: '',
       logo: {
         alt: 'TechGears Logo',
         src: 'img/techgears-logo.png',
+        href: 'https://techgears.app',
+        target: '_blank',
       },
       style: 'dark',
       items: [],
