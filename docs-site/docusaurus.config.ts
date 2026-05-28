@@ -78,7 +78,25 @@ const config: Config = {
         target: '_blank',
       },
       style: 'dark',
-      items: [],
+      items: [
+        {
+          href: 'https://docs.techgears.app',
+          label: 'Portal',
+          position: 'left',
+          target: '_self',
+        },
+        {
+          to: '/',
+          label: 'Documentação',
+          position: 'left',
+        },
+        {
+          href: 'https://github.com/TechGearsInteli/programmable-ecu',
+          label: 'GitHub',
+          position: 'right',
+          target: '_self',
+        },
+      ],
     },
     footer: undefined,
     prism: {
