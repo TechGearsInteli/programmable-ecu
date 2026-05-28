@@ -48,7 +48,19 @@ const config: Config = {
     mermaid: true,
   },
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        language: ['pt'],
+        indexBlog: false,
+        docsRouteBasePath: '/',
+        searchResultLimits: 8,
+      },
+    ],
+  ],
 
   themeConfig: {
     image: 'img/docusaurus-social-card.jpg',
@@ -68,35 +80,7 @@ const config: Config = {
       style: 'dark',
       items: [],
     },
-    footer: {
-      style: 'dark',
-      links: [
-        {
-          title: 'Documentação',
-          items: [
-            {label: 'Visão Geral', to: '/'},
-            {label: 'Guia de Uso', href: 'https://docs.techgears.app/guide.html'},
-          ],
-        },
-        {
-          title: 'Projeto',
-          items: [
-            {label: 'GitHub', href: 'https://github.com/TechGearsInteli/programmable-ecu'},
-            {label: 'Issues', href: 'https://github.com/TechGearsInteli/programmable-ecu/issues'},
-            {label: 'Projeto DevGears', href: 'https://github.com/orgs/TechGearsInteli/projects/1'},
-          ],
-        },
-        {
-          title: 'TechGears',
-          items: [
-            {label: 'Site', href: 'https://techgears.app'},
-            {label: 'Instagram', href: 'https://www.instagram.com/tech.gears01/'},
-            {label: 'LinkedIn', href: 'https://www.linkedin.com/company/tech-gears01/'},
-          ],
-        },
-      ],
-      copyright: `Copyright © ${new Date().getFullYear()} TechGears Inteli. Built with Docusaurus.`,
-    },
+    footer: undefined,
     prism: {
       theme: prismThemes.oneDark,
       darkTheme: prismThemes.oneDark,
