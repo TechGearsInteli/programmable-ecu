@@ -76,20 +76,7 @@ const config: Config = {
         src: 'img/techgears-logo.png',
       },
       style: 'dark',
-      items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'ecuSidebar',
-          position: 'left',
-          label: 'Documentação',
-        },
-        {to: '/blog', label: 'Diário Técnico', position: 'left'},
-        {
-          href: 'https://github.com/TechGearsInteli/programmable-ecu',
-          label: 'GitHub',
-          position: 'right',
-        },
-      ],
+      items: [],
     },
     footer: {
       style: 'dark',
