@@ -32,6 +32,7 @@ const config: Config = {
       'classic',
       {
         docs: {
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/TechGearsInteli/programmable-ecu/edit/main/docs-site/',
         },
@@ -97,7 +98,7 @@ const config: Config = {
           title: 'Documentação',
           items: [
             {label: 'Visão Geral', to: '/'},
-            {label: 'Guia de Uso', to: '/docs/category/guia-de-uso'},
+            {label: 'Guia de Uso', to: '/category/guia-de-uso'},
           ],
         },
         {
