@@ -13,6 +13,10 @@ const config: Config = {
     v4: true,
   },
 
+  storage: {
+    namespace: 'tg-docs',
+  },
+
   url: 'https://docs.techgears.app',
   baseUrl: '/programmable-ecu/',
 
@@ -89,6 +93,12 @@ const config: Config = {
           to: '/',
           label: 'Documentação',
           position: 'left',
+        },
+        {
+          href: 'https://docs.techgears.app/category/guia-de-uso',
+          label: 'Guia',
+          position: 'left',
+          target: '_self',
         },
         {
           href: 'https://github.com/TechGearsInteli/programmable-ecu',
