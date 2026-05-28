@@ -12,7 +12,7 @@ sidebar_position: 6
 
 ## Estágios do pipeline
 
-### Lint — Verificação da documentação
+### Lint: Verificação da documentação
 
 &emsp;Ativado quando um Pull Request é aberto ou atualizado. O job `check-docs` analisa os arquivos `.md` modificados dentro da pasta `docs-site/docs/` e valida se cada arquivo segue os padrões do projeto:
 
@@ -23,7 +23,7 @@ sidebar_position: 6
 
 &emsp;Blocos de código são excluídos da análise. Arquivos fora de `docs-site/docs/` são ignorados.
 
-### Deploy — Publicação no GitHub Pages
+### Deploy: Publicação no GitHub Pages
 
 &emsp;Ativado quando commits chegam à branch `main`. O job executa:
 

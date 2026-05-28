@@ -36,19 +36,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/TechGearsInteli/programmable-ecu/edit/main/docs-site/',
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ['rss', 'atom'],
-            xslt: true,
-          },
-          editUrl: 'https://github.com/TechGearsInteli/programmable-ecu/edit/main/docs-site/',
-          onInlineTags: 'warn',
-          onInlineAuthors: 'warn',
-          onUntruncatedBlogPosts: 'warn',
-          blogTitle: 'Diário Técnico',
-          blogDescription: 'Registro cronológico do desenvolvimento da ECU',
-        },
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
