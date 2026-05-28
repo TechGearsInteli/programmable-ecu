@@ -8,7 +8,7 @@ sidebar_position: 1
 
 <div style={{textAlign: 'justify'}}>
 
-&emsp;A **Programmable ECU** é uma ECU (Electronic Control Unit) de código aberto desenvolvida pelo [TechGears](https://techgears.app), clube universitário do Inteli. O projeto tem como objetivo construir do zero um sistema de gerenciamento eletrônico para motores de combustão interna de 4 cilindros, desde o hardware até a interface de calibração.
+&emsp;A **Programmable ECU** é uma ECU (Electronic Control Unit) de código aberto desenvolvida pela [TechGears](https://techgears.app), clube universitário do Inteli. O projeto tem como objetivo construir do zero um sistema de gerenciamento eletrônico para motores de combustão interna de 4 cilindros, desde o hardware até a interface de calibração.
 
 &emsp;A ECU lê sensores do motor (rotação, pressão, temperatura, posição da borboleta e mistura ar-combustível), calcula em tempo real o tempo de injeção e o momento de ignição, e expõe uma interface web via Wi-Fi para que o calibrador ajuste os mapas e acompanhe a telemetria sem precisar instalar nenhum software.
 
