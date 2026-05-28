@@ -1,0 +1,10 @@
+{
+  "label": "Firmware",
+  "position": 5,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Arquitetura do firmware, leitura de sensores, cálculo de injeção e controle de ignição. Em construção — veja o Guia de Documentação para contribuir."
+  }
+}

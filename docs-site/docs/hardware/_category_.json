@@ -1,0 +1,10 @@
+{
+  "label": "Hardware",
+  "position": 4,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Diagramas de blocos, lista de componentes e guia de instalação no veículo. Em construção — veja o Guia de Documentação para contribuir."
+  }
+}

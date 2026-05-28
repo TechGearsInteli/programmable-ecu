@@ -1,0 +1,10 @@
+{
+  "label": "Decisões de Projeto",
+  "position": 7,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "ADRs (Architecture Decision Records) e escopo da V1. Em construção — veja o Guia de Documentação para contribuir."
+  }
+}

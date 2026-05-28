@@ -1,0 +1,10 @@
+{
+  "label": "Teoria do Motor",
+  "position": 3,
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Fundamentos de motores de combustão interna, sensores e controle de mistura. Em construção — veja o Guia de Documentação para contribuir."
+  }
+}
