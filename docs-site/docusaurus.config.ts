@@ -73,7 +73,7 @@ const config: Config = {
           title: 'Documentação',
           items: [
             {label: 'Visão Geral', to: '/'},
-            {label: 'Guia de Uso', to: '/category/guia-de-uso'},
+            {label: 'Guia de Uso', href: 'https://docs.techgears.app/guide.html'},
           ],
         },
         {
