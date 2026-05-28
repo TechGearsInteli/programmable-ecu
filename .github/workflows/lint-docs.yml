@@ -3,8 +3,8 @@ name: Lint Docs
 on:
   pull_request:
     paths:
-      - 'docs-site/docs/**/*.md'
-      - 'docs-site/docs/**/*.mdx'
+      - 'docs/docs/**/*.md'
+      - 'docs/docs/**/*.mdx'
 
 jobs:
   check-docs:
@@ -24,10 +24,10 @@ jobs:
           BASE=${{ github.event.pull_request.base.sha }}
           HEAD=${{ github.event.pull_request.head.sha }}
           FILES=$(git diff --name-only --diff-filter=AM "$BASE...$HEAD" -- \
-            'docs-site/docs/*.md' 'docs-site/docs/**/*.md' \
-            'docs-site/docs/*.mdx' 'docs-site/docs/**/*.mdx' | tr '\n' ' ')
+            'docs/docs/*.md' 'docs/docs/**/*.md' \
+            'docs/docs/*.mdx' 'docs/docs/**/*.mdx' | tr '\n' ' ')
           echo "files=$FILES" >> $GITHUB_OUTPUT
 
       - name: Check documentation standard
         if: steps.changed.outputs.files != ''
-        run: node scripts/check-docs.js ${{ steps.changed.outputs.files }}
+        run: node lint/check-docs.js ${{ steps.changed.outputs.files }}

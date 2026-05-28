@@ -166,7 +166,7 @@ const files = process.argv.slice(2).filter((f) => f.endsWith(".md"));
 let failed = false;
 
 if (files.length === 0) {
-  console.log("Nenhum arquivo .md alterado em docs-site/docs/.");
+  console.log("Nenhum arquivo .md alterado em docs/docs/.");
   process.exit(0);
 }
 
@@ -185,7 +185,7 @@ for (const file of files) {
 
 if (failed) {
   console.log("\nUm ou mais arquivos não seguem o padrão de documentação.");
-  console.log("Consulte docs-site/docs/guia/ para referência.");
+  console.log("Consulte docs/docs/guia/ para referência.");
   process.exit(1);
 }
 

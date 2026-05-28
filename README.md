@@ -20,17 +20,13 @@ A Programmable ECU lê sensores do motor (CKP, MAP, TPS, CLT, IAT e sonda lambda
 
 ```
 programmable-ecu/
-├── firmware/                  # Código do microcontrolador
-│   ├── hal/                   # Hardware Abstraction Layer (GPIO, ADC, Timers, Wi-Fi)
-│   ├── sensors/               # Leitura e conversão de sensores
-│   ├── control/               # Cálculo de injeção, ignição e controle lambda
-│   ├── comms/                 # Servidor WebSocket e persistência NVS
-│   ├── web/                   # Assets da interface React (servidos via SPIFFS)
-│   └── main.c                 # Entry point e tasks FreeRTOS
-├── hardware/                  # Esquemáticos, diagramas de blocos e BOM
-├── calibration/               # Mapas de calibração (.json)
-├── docs-site/                 # Site de documentação (Docusaurus)
-├── scripts/
+├── src/
+│   ├── firmware/              # Código do microcontrolador (C + ESP-IDF / PlatformIO)
+│   ├── hardware/              # Esquemáticos, PCB e diagramas de blocos
+│   ├── calibration/           # Mapas de calibração (.json)
+│   └── software/              # Interface web de calibração (React)
+├── docs/                      # Site de documentação (Docusaurus)
+├── lint/
 │   └── check-docs.js          # Validador de padrão de documentação
 ├── docs-meta.json             # Metadados para o portal docs.techgears.app
 └── .github/
@@ -55,7 +51,7 @@ programmable-ecu/
 ## Rodando a documentação localmente
 
 ```bash
-cd docs-site
+cd docs
 npm install
 npm run start
 ```
@@ -70,20 +66,9 @@ O site abre em `http://localhost:3000/programmable-ecu/`.
 
 | Workflow | Gatilho | O que faz |
 |---------|---------|-----------|
-| `deploy-docs.yml` | Push em `main` com mudanças em `docs-site/` | Build do Docusaurus e deploy no GitHub Pages |
-| `lint-docs.yml` | Pull Request com mudanças em `docs-site/docs/` | Valida o padrão de documentação via `check-docs.js` |
+| `deploy-docs.yml` | Push em `main` com mudanças em `docs/` | Build do Docusaurus e deploy no GitHub Pages |
+| `lint-docs.yml` | Pull Request com mudanças em `docs/docs/` | Valida o padrão de documentação via `check-docs.js` |
 | `pr-description.yml` | Abertura de PR | Preenche automaticamente a descrição com tasks em andamento e commits da branch |
-
----
-
-## Decisões de arquitetura
-
-As decisões técnicas relevantes estão documentadas como ADRs (Architecture Decision Records) em `docs-site/docs/`:
-
-- **ADR-001:** Escolha do microcontrolador (ESP32 vs STM32)
-- **ADR-002:** Arquitetura do firmware em camadas com HAL
-- **ADR-003:** Interface de calibração web (React + WebSocket)
-- **ADR-004:** Protocolo WebSocket com JSON tipado
 
 ---
 
