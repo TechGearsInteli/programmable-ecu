@@ -38,7 +38,7 @@ const config: Config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/TechGearsInteli/programmable-ecu/edit/main/docs-site/',
+          editUrl: 'https://github.com/TechGearsInteli/programmable-ecu/edit/main/docs/',
         },
         blog: false,
         theme: {
