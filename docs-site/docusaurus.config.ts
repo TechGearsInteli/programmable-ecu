@@ -95,6 +95,7 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
           target: '_self',
+          className: 'navbar-github-link',
         },
       ],
     },

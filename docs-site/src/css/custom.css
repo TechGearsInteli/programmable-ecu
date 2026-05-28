@@ -105,3 +105,12 @@
   color: var(--tg-red);
   margin-bottom: 0.5rem;
 }
+
+/* Hide external link icons in navbar except GitHub */
+.navbar__item svg[aria-label="(opens in new tab)"] {
+  display: none;
+}
+
+.navbar-github-link svg[aria-label="(opens in new tab)"] {
+  display: inline;
+}
