@@ -14,7 +14,7 @@ const config: Config = {
   },
 
   url: 'https://docs.techgears.app',
-  baseUrl: '/',
+  baseUrl: '/programmable-ecu/',
 
   organizationName: 'TechGearsInteli',
   projectName: 'programmable-ecu',
