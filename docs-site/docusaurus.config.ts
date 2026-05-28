@@ -7,7 +7,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Programmable ECU',
   tagline: 'ECU programável de código aberto para motores de 4 cilindros',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.png',
 
   future: {
     v4: true,
@@ -72,7 +72,7 @@ const config: Config = {
       title: 'Programmable ECU',
       logo: {
         alt: 'TechGears Logo',
-        src: 'img/logo.svg',
+        src: 'img/techgears-logo.png',
       },
       style: 'dark',
       items: [
@@ -96,8 +96,8 @@ const config: Config = {
         {
           title: 'Documentação',
           items: [
-            {label: 'Introdução', to: '/docs/introducao'},
-            {label: 'Guia de Documentação', to: '/docs/guia-documentacao'},
+            {label: 'Visão Geral', to: '/'},
+            {label: 'Guia de Uso', to: '/docs/category/guia-de-uso'},
           ],
         },
         {

@@ -18,7 +18,7 @@ export default function Home(): ReactNode {
             desenvolvida pelo clube universitário TechGears no Inteli.
           </p>
           <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
-            <Link className="button button--primary button--lg" to="/docs/introducao">
+            <Link className="button button--primary button--lg" to="/docs/visao-geral">
               Começar
             </Link>
             <Link
