@@ -1,0 +1,6 @@
+{
+  "slug": "programmable-ecu",
+  "name": "Programmable ECU",
+  "description": "ECU programável de código aberto para motores de combustão interna de 4 cilindros. ESP32, firmware em C, calibração web e telemetria em tempo real.",
+  "status": "active"
+}

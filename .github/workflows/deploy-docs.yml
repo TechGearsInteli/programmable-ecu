@@ -52,3 +52,12 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Notify docs portal
+        if: success() && vars.PORTAL_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.PORTAL_TOKEN }}
+        run: |
+          gh api repos/TechGearsInteli/TechGearsInteli.github.io/dispatches \
+            --field event_type=docs-deployed \
+            --field "client_payload[slug]=programmable-ecu"
