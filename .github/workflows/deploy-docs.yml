@@ -54,7 +54,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: Notify docs portal
-        if: success() && vars.PORTAL_TOKEN != ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PORTAL_TOKEN }}
         run: |
