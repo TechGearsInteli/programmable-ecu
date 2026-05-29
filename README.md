@@ -4,13 +4,9 @@ ECU (Electronic Control Unit) programável de código aberto para motores de com
 
 > Documentação completa em **[docs.techgears.app/programmable-ecu](https://docs.techgears.app/programmable-ecu/)**
 
----
-
 ## Visão Geral
 
 A Programmable ECU lê sensores do motor, calcula o tempo de injeção de combustível e o momento de ignição em tempo real, e expõe uma interface web via Wi-Fi para calibração e telemetria.
-
----
 
 ## Estrutura do repositório
 
@@ -32,16 +28,12 @@ programmable-ecu/
         └── pr-description.yml # Preenchimento automático de descrição de PR
 ```
 
----
-
 ## Pré-requisitos
 
 | Ferramenta | Uso | Instalação |
 |-----------|-----|-----------|
 | [Node.js 18+](https://nodejs.org/) | Rodar o site de documentação localmente | nodejs.org |
 | [Git](https://git-scm.com/) | Controle de versão | git-scm.com |
-
----
 
 ## Rodando a documentação localmente
 
@@ -53,8 +45,6 @@ npm run start
 
 O site abre em `http://localhost:3000/programmable-ecu/`.
 
----
-
 ## Pipelines de CI
 
 | Workflow | Gatilho | O que faz |
@@ -62,8 +52,6 @@ O site abre em `http://localhost:3000/programmable-ecu/`.
 | `deploy-docs.yml` | Push em `main` com mudanças em `docs/` | Build e deploy da documentação no GitHub Pages |
 | `lint-docs.yml` | Pull Request com mudanças em `docs/docs/` | Valida o padrão de documentação via `check-docs.js` |
 | `pr-description.yml` | Abertura de PR | Preenche automaticamente a descrição com tasks em andamento e commits da branch |
-
----
 
 ## Licença
 
