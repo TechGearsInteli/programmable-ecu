@@ -1,63 +1,20 @@
-name: Deploy Docs to GitHub Pages
+name: Notify Docs Portal
 
 on:
   push:
     branches: [main]
     paths:
       - 'docs/**'
-      - '.github/workflows/deploy-docs.yml'
+      - 'docs-meta.json'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
-  build:
+  notify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
-
-      - name: Install dependencies
-        working-directory: docs
-        run: npm ci
-
-      - name: Build Docusaurus
-        working-directory: docs
-        run: npm run build
-
-      - uses: actions/configure-pages@v4
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/build
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Notify docs portal
-        continue-on-error: true
+      - name: Trigger portal rebuild
         env:
           GH_TOKEN: ${{ secrets.PORTAL_TOKEN }}
         run: |
           gh api repos/TechGearsInteli/TechGearsInteli.github.io/dispatches \
-            --field event_type=docs-deployed \
-            --field "client_payload[slug]=programmable-ecu"
+            --field event_type=docs-deployed
