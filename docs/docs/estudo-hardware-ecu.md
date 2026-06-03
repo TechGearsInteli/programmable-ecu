@@ -4,6 +4,8 @@ slug: /hardware-ecu
 sidebar_position: 3
 ---
 
+<div style={{textAlign: 'justify'}}>
+
 # Estudo de Hardware da ECU Programável
 
 Projeto: Programmable ECU - TechGears Inteli  
@@ -44,6 +46,10 @@ Em uma ECU, temporizacao e mais critica do que processamento bruto. Uma diferenc
 
 ## Comparacao objetiva
 
+<div align="center">
+
+<small><strong>Quadro 1 - Comparação entre ESP32 e STM32</strong></small>
+
 | Criterio | ESP32 | STM32 |
 |---|---|---|
 | Facilidade inicial | Muito acessivel, barato, comunidade grande e Wi-Fi integrado | Exige mais curva de aprendizado, especialmente com timers e HAL/LL |
@@ -55,6 +61,10 @@ Em uma ECU, temporizacao e mais critica do que processamento bruto. Uma diferenc
 | Ambiente de desenvolvimento | Arduino/ESP-IDF, rapido para prototipar | STM32CubeIDE/CubeMX, HAL/LL, mais profissional para embarcado |
 | Custo e disponibilidade | Muito bom para prototipos | Variavel, mas ha muitas opcoes industriais e automotivas |
 | Adequacao como ECU final | Bom para prototipo com interface Wi-Fi integrada | Mais adequado como controlador principal de tempo real |
+
+Fonte: Dados compilados de documentacoes da Espressif, STMicroelectronics e aplicacoes automotivas.
+
+</div>
 
 ## Pontos tecnicos importantes
 
@@ -150,10 +160,18 @@ Essa simplificacao considera a roda como 60 posicoes. Na pratica, a ECU precisa 
 
 Existem dois tipos comuns de sensor CKP:
 
+<div align="center">
+
+<small><strong>Quadro 2 - Comparação entre sensores VR e Hall</strong></small>
+
 | Tipo | Sinal | Alimentacao | Vantagens | Cuidados |
 |---|---|---|---|---|
 | VR, relutor ou indutivo | Senoidal/analogico, amplitude varia com RPM | Normalmente nao precisa alimentacao | Robusto, comum em motores antigos | Precisa condicionamento de sinal; em baixa RPM o sinal e fraco |
 | Hall | Digital/quadrado | Precisa alimentacao | Mais facil de ler no microcontrolador | Requer alimentacao e cuidado com nivel logico |
+
+Fonte: Haltech e Motorsport Electronics documentation.
+
+</div>
 
 O sensor VR gera uma senoide conforme o dente se aproxima e se afasta. Em baixa rotacao, a amplitude e pequena; em alta rotacao, pode crescer bastante. Por isso nao deve ser ligado diretamente ao pino do microcontrolador. O ideal e usar circuito condicionador, como comparador, circuito com histerese ou CI dedicado para sensor VR.
 
@@ -427,10 +445,18 @@ Para gasolina, a referencia estequiometrica costuma ser proxima de AFR 14,7:1, e
 
 ## Banda estreita vs banda larga
 
+<div align="center">
+
+<small><strong>Quadro 3 - Comparação entre Banda Estreita e Banda Larga</strong></small>
+
 | Tipo | O que mede bem | Saida | Uso comum | Limitacao |
 |---|---|---|---|---|
 | Banda estreita | Detecta se esta rico ou pobre perto de lambda 1 | Sinal muito sensivel perto do estequiometrico | Controle fechado em carros originais | Nao mede com precisao AFR fora da regiao estequiometrica |
 | Banda larga | Mede uma faixa ampla de lambda/AFR | Normalmente via controlador 0-5 V, CAN ou serial | Calibracao, telemetria e acerto de mapa | Precisa controlador dedicado e aquecimento controlado |
+
+Fonte: Bosch Motorsport, Lambda Sensor LSU 4.9 datasheet.
+
+</div>
 
 Uma sonda banda estreita funciona bem para dizer "rico ou pobre" perto de lambda 1, mas nao informa com precisao se o motor esta em AFR 12,5, 13,2 ou 15,5. Para calibrar uma ECU programavel, isso e uma limitacao grande.
 
@@ -613,6 +639,10 @@ A documentacao do Speeduino define dwell como o periodo em que a corrente e apli
 
 MOSFET e IGBT sao chaves semicondutoras, mas com comportamentos diferentes.
 
+<div align="center">
+
+<small><strong>Quadro 4 - Comparação entre MOSFET e IGBT</strong></small>
+
 | Criterio | MOSFET | IGBT |
 |---|---|---|
 | Melhor uso comum | Baixa/media tensao, chaveamento rapido | Tensoes/correntes maiores, cargas como ignicao |
@@ -620,6 +650,10 @@ MOSFET e IGBT sao chaves semicondutoras, mas com comportamentos diferentes.
 | Queda em conducao | Depende de Rds(on) | Tem queda Vce(sat) |
 | Uso em injetor | Muito comum | Menos comum |
 | Uso em bobina passiva | Pode existir, mas IGBT e mais tradicional | Muito comum em drivers de ignicao |
+
+Fonte: Texas Instruments e Nexperia application notes.
+
+</div>
 
 Em bobinas passivas, o driver precisa suportar alta energia indutiva e picos durante o desligamento. Por isso, modulos e projetos de ignicao costumam usar IGBTs automotivos dedicados, muitas vezes com protecoes internas.
 
@@ -723,3 +757,5 @@ Nessa historia, eu foquei em entender os componentes antes de montar a ECU. O es
 - Speeduino Doxygen - conceito de dwell em IgnitionSchedule: https://speeduino.github.io/speeduino-doxygen/struct_ignition_schedule.html
 - Motorsport Electronics - Ignition Coil Connections, bobinas ativas/passivas: https://motorsport-electronics.co.uk/onlinehelp/html/IgnitionCoilConnections.html
 - DIYAutoTune - Bosch BIP373 ignition module e riscos de dwell excessivo: https://diyautotune.com/blogs/technical-articles/bosch-bip373-ignition-module
+
+</div>
