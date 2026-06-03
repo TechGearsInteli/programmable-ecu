@@ -1,3 +1,9 @@
+---
+title: Estudo de Hardware da ECU Programável
+slug: /hardware-ecu
+sidebar_position: 3
+---
+
 # Estudo de Hardware da ECU Programável
 
 Projeto: Programmable ECU - TechGears Inteli  
