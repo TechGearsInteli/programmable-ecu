@@ -131,15 +131,15 @@ flowchart LR
 
 ## Os sensores que a ECU lê
 
-&emsp;A ECU só consegue calcular injeção e ignição porque "enxerga" o estado do motor através de sensores. Cada sensor converte uma grandeza física (rotação, pressão, temperatura, posição) em um **sinal elétrico** que o microcontrolador consegue ler. Esses sinais se dividem em dois tipos: **digitais** (pulsos que alternam entre dois níveis de tensão, lidos por interrupção ou temporizador) e **analógicos** (uma tensão contínua proporcional à grandeza, lida pelo conversor analógico-digital, o ADC). Os cinco sensores principais de entrada são descritos a seguir.
+&emsp;A ECU só consegue calcular injeção e ignição porque "enxerga" o estado do motor através de sensores. Cada sensor converte uma grandeza física (rotação, pressão, temperatura, posição) em um **sinal elétrico** que o microcontrolador — o pequeno computador (chip) que executa a ECU — consegue ler. Esses sinais se dividem em dois tipos: **digitais** (pulsos que alternam entre dois níveis de tensão; cada transição entre os níveis, a subida ou a descida do pulso, é chamada de *borda*, e é nela que a ECU detecta o pulso — seja por *interrupção*, quando o processador reage no instante exato de cada pulso, seja por *temporizador*, que mede o tempo entre pulsos) e **analógicos** (uma tensão contínua proporcional à grandeza, lida pelo conversor analógico-digital, o ADC). Os cinco sensores principais de entrada são descritos a seguir.
 
-&emsp;**CKP — posição do virabrequim.** É o sensor mais importante para o sincronismo. Ele lê os dentes de uma roda fônica presa ao virabrequim (tipicamente uma roda "36−1", com um dente faltando que serve de referência de posição). A partir desses pulsos, a ECU calcula a **rotação (RPM)** e sabe em que ângulo o motor está, para agendar injeção e faísca. Produz um **sinal digital** de pulsos. Há duas tecnologias comuns: o sensor de relutância variável (indutivo), que gera uma onda de tensão alternada cuja frequência e amplitude crescem com a rotação, e o sensor de efeito Hall, que entrega uma onda quadrada limpa entre 0 e 5 V.
+&emsp;**CKP — posição do virabrequim.** É o sensor mais importante para o sincronismo. Ele lê os dentes de uma roda fônica presa ao virabrequim (tipicamente uma roda "36−1", com um dente faltando que serve de referência de posição). A partir desses pulsos, a ECU calcula a **rotação (RPM)** e sabe em que ângulo o motor está, para agendar injeção e faísca. Produz um **sinal digital** de pulsos. Há duas tecnologias comuns: o sensor de **relutância variável** (indutivo — funciona como um pequeno gerador, em que cada dente que passa induz a tensão), que gera uma onda de tensão alternada cuja frequência e amplitude crescem com a rotação; e o sensor de **efeito Hall** (eletrônico, alimentado por tensão), que entrega uma onda quadrada limpa entre 0 e 5 V.
 
-&emsp;**MAP — pressão absoluta do coletor de admissão.** Mede a pressão do ar no coletor, principal indicador de **carga** do motor (quanto ar está entrando). Produz um **sinal analógico**: uma tensão proporcional à pressão (por exemplo, de ~0,5 V em vácuo alto a ~4,5 V próximo da pressão atmosférica), gerada por um elemento piezorresistivo.
+&emsp;**MAP — pressão absoluta do coletor de admissão.** Mede a pressão do ar no coletor, principal indicador de **carga** do motor (quanto ar está entrando). Produz um **sinal analógico**: uma tensão proporcional à pressão (por exemplo, de ~0,5 V em vácuo alto a ~4,5 V próximo da pressão atmosférica), gerada por um elemento piezorresistivo (um material cuja resistência elétrica muda conforme a pressão aplicada).
 
 &emsp;**TPS — posição da borboleta.** Indica o quanto o acelerador está aberto, em porcentagem, revelando a **demanda do condutor**. É um **potenciômetro** (resistor variável) e produz um **sinal analógico**, uma tensão que cresce com a abertura (tipicamente ~0,5 V fechado a ~4,5 V em plena abertura). Sua taxa de variação é usada no enriquecimento de aceleração.
 
-&emsp;**CLT — temperatura do líquido de arrefecimento.** Informa se o motor está frio ou já aquecido, base para a correção de partida a frio. É um **termistor NTC** (*Negative Temperature Coefficient*): sua resistência **diminui** conforme a temperatura sobe. Ligado em um divisor de tensão, produz um **sinal analógico** não linear, que a ECU converte em °C por uma tabela.
+&emsp;**CLT — temperatura do líquido de arrefecimento.** Informa se o motor está frio ou já aquecido, base para a correção de partida a frio. É um **termistor NTC** (*Negative Temperature Coefficient*): sua resistência **diminui** conforme a temperatura sobe. Ligado em um divisor de tensão (um arranjo de dois resistores que transforma a variação de resistência do sensor em uma variação de tensão que a ECU consegue medir), produz um **sinal analógico** não linear, que a ECU converte em °C por uma tabela.
 
 &emsp;**IAT — temperatura do ar admitido.** Mede a temperatura do ar que entra, necessária para corrigir a **densidade** do ar no cálculo da massa (ar quente é menos denso e contém menos oxigênio). Funciona como o CLT: é um **termistor NTC** lido como **sinal analógico** por divisor de tensão.
 
@@ -149,7 +149,7 @@ flowchart LR
 | Sensor | Grandeza medida | Tipo de sinal elétrico | Como a ECU lê |
 |--------|-----------------|------------------------|---------------|
 | CKP (virabrequim) | Posição e rotação (RPM) | Digital (trem de pulsos) | Interrupção/temporizador por borda |
-| MAP (coletor) | Pressão de admissão (carga) | Analógico (tensão ∝ pressão) | ADC |
+| MAP (coletor) | Pressão de admissão (carga) | Analógico (tensão proporcional à pressão) | ADC |
 | TPS (borboleta) | Abertura da borboleta (%) | Analógico (potenciômetro) | ADC |
 | CLT (arrefecimento) | Temperatura do motor | Analógico (termistor NTC) | ADC + tabela de conversão |
 | IAT (ar admitido) | Temperatura do ar | Analógico (termistor NTC) | ADC + tabela de conversão |
@@ -161,7 +161,7 @@ flowchart LR
 
 ## Os injetores de combustível
 
-&emsp;O injetor é uma **válvula elétrica** (um solenoide): quando a ECU energiza sua bobina, um êmbolo se desloca e abre uma passagem por onde o combustível pressurizado é pulverizado; quando a ECU corta a energia, a válvula fecha. Como o combustível chega ao injetor sob pressão constante e regulada, a **quantidade injetada depende basicamente de quanto tempo o injetor fica aberto**.
+&emsp;O injetor é uma **válvula elétrica** acionada por uma **bobina interna** (por isso é chamado de *solenoide*): quando a ECU energiza essa bobina do injetor, a válvula abre e o combustível pressurizado é pulverizado; quando a ECU corta a energia, a válvula fecha. Como o combustível chega ao injetor sob pressão constante e regulada, a **quantidade injetada depende basicamente de quanto tempo o injetor fica aberto**.
 
 ### Tempo de injeção (pulse width)
 
@@ -169,7 +169,7 @@ flowchart LR
 
 ### Alta vs baixa impedância
 
-&emsp;Os injetores se dividem em dois tipos conforme a resistência elétrica da bobina, o que muda **como a ECU precisa acioná-los**:
+&emsp;A *impedância* de um injetor é, na prática, a **resistência elétrica** da sua bobina — a oposição que ela oferece à passagem de corrente, medida em *ohms*, cujo símbolo é a letra grega ômega (Ω). Conforme essa resistência, os injetores se dividem em dois tipos; quanto menor ela for, maior a corrente (medida em ampères, A) que circula ao energizar o injetor, e isso muda **como a ECU precisa acioná-los**:
 
 - **Alta impedância (saturados, ~12–16 Ω):** podem ser acionados de forma simples, aplicando a tensão da bateria diretamente — a própria resistência limita a corrente a um valor seguro (cerca de 1 A). Exigem um driver mais simples e são os mais comuns em veículos de fábrica.
 - **Baixa impedância (*peak-and-hold*, ~2–5 Ω):** deixam passar muito mais corrente, então precisam de um driver que aplique um **pico** de corrente alta para abrir rápido e depois reduza para uma corrente de **manutenção** menor, suficiente para mantê-los abertos sem superaquecer. Sem esse controle de corrente, a bobina esquentaria e poderia queimar. São usados em injetores de alta vazão.
@@ -199,7 +199,7 @@ tempo comandado = tempo de injeção calculado + dead time(tensão da bateria)
 
 ## O mapa de combustível e a interpolação
 
-&emsp;A quantidade base de combustível não vem de uma fórmula fechada: ela vem de uma **tabela bidimensional** chamada **mapa de combustível**. As duas entradas (os eixos) são a **rotação (RPM)** e a **carga** do motor (normalmente a pressão do coletor, MAP). Cada célula da tabela guarda o valor base de combustível para aquela combinação específica de rotação e carga. A ECU descobre em que rotação e carga o motor está, localiza a célula correspondente e lê o valor.
+&emsp;A quantidade base de combustível não vem de uma fórmula fechada: ela vem de uma **tabela bidimensional** chamada **mapa de combustível**. As duas entradas (os eixos) são a **rotação (RPM)** e a **carga** do motor (normalmente a pressão do coletor, MAP, medida em quilopascals, kPa — uma unidade de pressão; como referência, a pressão atmosférica ao nível do mar é de cerca de 100 kPa). Cada célula da tabela guarda o valor base de combustível para aquela combinação específica de rotação e carga. A ECU descobre em que rotação e carga o motor está, localiza a célula correspondente e lê o valor.
 
 &emsp;Usa-se uma tabela, e não uma equação, porque o comportamento real de um motor é complexo e não linear: a melhor dosagem para cada ponto é descoberta empiricamente, durante a calibração, e gravada na grade. O exemplo abaixo mostra um mapa 4×4 simplificado, com o tempo de injeção (em ms) para quatro rotações e quatro níveis de carga:
 
