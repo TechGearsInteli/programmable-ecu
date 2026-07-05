@@ -1,7 +1,7 @@
 ---
 title: Arquitetura
 slug: /arquitetura
-sidebar_position: 3
+sidebar_position: 2
 ---
 
 # Arquitetura do Sistema
@@ -75,17 +75,18 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 1: Correspondência entre dados OBD-II e sensores diretos</strong></small>
 
-| Dado OBD-II | Sensor direto equivalente (Fase 2) | Grandeza |
-|-------------|-----------------------------------|----------|
-| Engine RPM (PID 0x0C) | CKP (sensor de posição do virabrequim) | Rotação em RPM |
-| Coolant Temperature (PID 0x05) | CLT (sensor de temperatura do líquido) | Temperatura em °C |
-| Throttle Position (PID 0x11) | TPS (sensor de posição da borboleta) | Abertura em % |
-| Intake Manifold Pressure (PID 0x0B) | MAP (sensor de pressão do coletor) | Pressão em kPa |
-| Intake Air Temperature (PID 0x0F) | IAT (sensor de temperatura do ar) | Temperatura em °C |
-| O2 Sensor Voltage (PID 0x14) | Sonda lambda | Tensão proporcional à mistura |
-| Calculated Engine Load (PID 0x04) | Calculado internamente pelo firmware | Carga relativa em % |
+| Dado OBD-II                         | Sensor direto equivalente (Fase 2)     | Grandeza                      |
+| ----------------------------------- | -------------------------------------- | ----------------------------- |
+| Engine RPM (PID 0x0C)               | CKP (sensor de posição do virabrequim) | Rotação em RPM                |
+| Coolant Temperature (PID 0x05)      | CLT (sensor de temperatura do líquido) | Temperatura em °C             |
+| Throttle Position (PID 0x11)        | TPS (sensor de posição da borboleta)   | Abertura em %                 |
+| Intake Manifold Pressure (PID 0x0B) | MAP (sensor de pressão do coletor)     | Pressão em kPa                |
+| Intake Air Temperature (PID 0x0F)   | IAT (sensor de temperatura do ar)      | Temperatura em °C             |
+| O2 Sensor Voltage (PID 0x14)        | Sonda lambda                           | Tensão proporcional à mistura |
+| Calculated Engine Load (PID 0x04)   | Calculado internamente pelo firmware   | Carga relativa em %           |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 &emsp;A única limitação da Fase 1 é que o microcontrolador lê os dados, mas não controla nada: não aciona injetores nem bobinas. O veículo continua sendo gerenciado pela ECU original. Isso é intencional e seguro: o time aprende, desenvolve e valida sem risco nenhum ao motor.
@@ -115,16 +116,17 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 2: Sensores de entrada da ECU (Fase 2)</strong></small>
 
-| Sensor | Grandeza medida | Uso no sistema |
-|--------|----------------|----------------|
-| CKP (Posição do virabrequim) | Velocidade angular e posição do motor | Cálculo de rotação (RPM), sincronismo de injeção e ignição |
-| MAP (Pressão do coletor) | Pressão absoluta no coletor de admissão | Principal indicador de carga do motor; eixo vertical do mapa de calibração |
-| TPS (Posição da borboleta) | Abertura percentual da borboleta | Indica demanda instantânea do condutor; usado em enriquecimento de aceleração |
-| CLT (Temperatura do líquido) | Temperatura do arrefecimento do motor | Correções de partida a frio e proteção por sobretemperatura |
-| IAT (Temperatura do ar) | Temperatura do ar admitido | Correção de densidade do ar na mistura |
-| Sonda lambda | Teor de oxigênio nos gases de escape | Realimentação para controle de malha fechada da mistura ar-combustível |
+| Sensor                       | Grandeza medida                         | Uso no sistema                                                                |
+| ---------------------------- | --------------------------------------- | ----------------------------------------------------------------------------- |
+| CKP (Posição do virabrequim) | Velocidade angular e posição do motor   | Cálculo de rotação (RPM), sincronismo de injeção e ignição                    |
+| MAP (Pressão do coletor)     | Pressão absoluta no coletor de admissão | Principal indicador de carga do motor; eixo vertical do mapa de calibração    |
+| TPS (Posição da borboleta)   | Abertura percentual da borboleta        | Indica demanda instantânea do condutor; usado em enriquecimento de aceleração |
+| CLT (Temperatura do líquido) | Temperatura do arrefecimento do motor   | Correções de partida a frio e proteção por sobretemperatura                   |
+| IAT (Temperatura do ar)      | Temperatura do ar admitido              | Correção de densidade do ar na mistura                                        |
+| Sonda lambda                 | Teor de oxigênio nos gases de escape    | Realimentação para controle de malha fechada da mistura ar-combustível        |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 &emsp;O processo para essa transição é:
@@ -303,31 +305,32 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 3: Ordem de desenvolvimento do projeto</strong></small>
 
-| Etapa | O que fazer | Depende de | Resultado concreto |
-|-------|------------|------------|-------------------|
-| 1 | Configurar repositório e documentação | Nada | Repositório organizado, site de docs funcionando |
-| 2 | Estudar teoria do motor de combustão | Nada | Entendimento de ciclos, sensores e controle de mistura |
-| 3 | Estudar os componentes eletrônicos da ECU | Etapa 2 | Entendimento do papel de cada sensor e driver |
-| 4 | Familiarização com o microcontrolador | Etapa 3 | Timers, ADC e interrupções funcionando em código simples |
-| 5 | Implementar driver OBD-II no firmware (Fase 1) | Etapa 4 | Leitura de RPM, temperatura, TPS e lambda de um carro real |
-| 6 | Implementar módulo de sensores com dados OBD-II | Etapa 5 | Valores convertidos e validados disponíveis para o firmware |
-| 7 | Implementar ponto de acesso e canal bidirecional | Etapa 4 | ECU visível como rede sem fio, dados fluindo para a interface |
-| 8 | Implementar API de configuração | Etapa 7 | Mapas legíveis e editáveis via rede |
-| 9 | Construir dashboard de telemetria | Etapas 6 e 7 | Grandezas do motor visíveis em tempo real no navegador |
-| 10 | Construir interface de calibração | Etapas 8 e 9 | Tabelas editáveis com célula ativa destacada em tempo real |
-| 11 | Implementar datalogger e exportação | Etapas 9 e 10 | Arquivos de log exportáveis, calibrações backup |
-| 12 | Implementar núcleo de controle e mapas | Etapas 6 e 10 | Cálculo de injeção e ignição validado com dados reais |
-| 13 | Implementar armazenamento persistente | Etapa 12 | Mapas sobrevivem a desligamentos, recuperação de dados corrompidos |
-| 14 | Implementar segurança e modos de falha | Etapa 12 | FMEA documentado, limp mode e watchdog funcionando |
-| 15 | Projetar esquemático da PCB (Fase 2) | Etapas 3 e 12 | Esquemático completo com todos os circuitos de condicionamento |
-| 16 | Prototipar em protoboard | Etapa 15 | Circuito físico validado com multímetro e osciloscópio |
-| 17 | Fabricar PCB | Etapa 16 | Placa de circuito impresso montada |
-| 18 | Migrar módulo de sensores para leitura direta | Etapas 6 e 17 | Firmware lendo sensores físicos no lugar do OBD-II |
-| 19 | Validar drivers de injetor e bobina em bancada | Etapa 17 | Pulsos verificados com osciloscópio, tolerância correta |
-| 20 | Teste em motor estático e calibração inicial | Etapas 18 e 19 | Motor funciona sob controle da ECU própria |
-| 21 | Calibração em pista e validação final | Etapa 20 | ECU calibrada e validada em condições reais de uso |
+| Etapa | O que fazer                                      | Depende de     | Resultado concreto                                                 |
+| ----- | ------------------------------------------------ | -------------- | ------------------------------------------------------------------ |
+| 1     | Configurar repositório e documentação            | Nada           | Repositório organizado, site de docs funcionando                   |
+| 2     | Estudar teoria do motor de combustão             | Nada           | Entendimento de ciclos, sensores e controle de mistura             |
+| 3     | Estudar os componentes eletrônicos da ECU        | Etapa 2        | Entendimento do papel de cada sensor e driver                      |
+| 4     | Familiarização com o microcontrolador            | Etapa 3        | Timers, ADC e interrupções funcionando em código simples           |
+| 5     | Implementar driver OBD-II no firmware (Fase 1)   | Etapa 4        | Leitura de RPM, temperatura, TPS e lambda de um carro real         |
+| 6     | Implementar módulo de sensores com dados OBD-II  | Etapa 5        | Valores convertidos e validados disponíveis para o firmware        |
+| 7     | Implementar ponto de acesso e canal bidirecional | Etapa 4        | ECU visível como rede sem fio, dados fluindo para a interface      |
+| 8     | Implementar API de configuração                  | Etapa 7        | Mapas legíveis e editáveis via rede                                |
+| 9     | Construir dashboard de telemetria                | Etapas 6 e 7   | Grandezas do motor visíveis em tempo real no navegador             |
+| 10    | Construir interface de calibração                | Etapas 8 e 9   | Tabelas editáveis com célula ativa destacada em tempo real         |
+| 11    | Implementar datalogger e exportação              | Etapas 9 e 10  | Arquivos de log exportáveis, calibrações backup                    |
+| 12    | Implementar núcleo de controle e mapas           | Etapas 6 e 10  | Cálculo de injeção e ignição validado com dados reais              |
+| 13    | Implementar armazenamento persistente            | Etapa 12       | Mapas sobrevivem a desligamentos, recuperação de dados corrompidos |
+| 14    | Implementar segurança e modos de falha           | Etapa 12       | FMEA documentado, limp mode e watchdog funcionando                 |
+| 15    | Projetar esquemático da PCB (Fase 2)             | Etapas 3 e 12  | Esquemático completo com todos os circuitos de condicionamento     |
+| 16    | Prototipar em protoboard                         | Etapa 15       | Circuito físico validado com multímetro e osciloscópio             |
+| 17    | Fabricar PCB                                     | Etapa 16       | Placa de circuito impresso montada                                 |
+| 18    | Migrar módulo de sensores para leitura direta    | Etapas 6 e 17  | Firmware lendo sensores físicos no lugar do OBD-II                 |
+| 19    | Validar drivers de injetor e bobina em bancada   | Etapa 17       | Pulsos verificados com osciloscópio, tolerância correta            |
+| 20    | Teste em motor estático e calibração inicial     | Etapas 18 e 19 | Motor funciona sob controle da ECU própria                         |
+| 21    | Calibração em pista e validação final            | Etapa 20       | ECU calibrada e validada em condições reais de uso                 |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## Escopo da V1
@@ -337,21 +340,22 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 4: Escopo da V1</strong></small>
 
-| Incluído na V1 | Fora do escopo da V1 |
-|----------------|----------------------|
-| Leitura de dados via OBD-II (Fase 1) | Injeção direta (GDI) |
-| Injeção sequencial em 4 cilindros (Fase 2) | Controle de câmbio automático |
-| Ignição por bobina individual por cilindro (Fase 2) | Controle de turbo (wastegate eletrônica) |
-| Leitura de CKP, MAP, TPS, CLT, IAT e lambda (Fase 2) | Controle de tração e ABS |
-| Controle de lambda em malha fechada | Protocolo OBD-II de diagnóstico padrão de mercado |
-| Mapa de combustível 2D com interpolação bilinear | Múltiplos perfis de calibração simultâneos |
-| Mapa de ignição 2D | Aplicativo nativo (mobile ou desktop) |
-| Interface web via rede sem fio local | Telemetria remota (fora da rede local da ECU) |
-| Dashboard de telemetria e datalogger | Atualizações de firmware remotas (OTA) |
-| Modo de emergência e watchdog | Redundância de hardware |
-| Memória persistente com verificação de integridade | Suporte a mais de 4 cilindros |
+| Incluído na V1                                       | Fora do escopo da V1                              |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| Leitura de dados via OBD-II (Fase 1)                 | Injeção direta (GDI)                              |
+| Injeção sequencial em 4 cilindros (Fase 2)           | Controle de câmbio automático                     |
+| Ignição por bobina individual por cilindro (Fase 2)  | Controle de turbo (wastegate eletrônica)          |
+| Leitura de CKP, MAP, TPS, CLT, IAT e lambda (Fase 2) | Controle de tração e ABS                          |
+| Controle de lambda em malha fechada                  | Protocolo OBD-II de diagnóstico padrão de mercado |
+| Mapa de combustível 2D com interpolação bilinear     | Múltiplos perfis de calibração simultâneos        |
+| Mapa de ignição 2D                                   | Aplicativo nativo (mobile ou desktop)             |
+| Interface web via rede sem fio local                 | Telemetria remota (fora da rede local da ECU)     |
+| Dashboard de telemetria e datalogger                 | Atualizações de firmware remotas (OTA)            |
+| Modo de emergência e watchdog                        | Redundância de hardware                           |
+| Memória persistente com verificação de integridade   | Suporte a mais de 4 cilindros                     |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 &emsp;As decisões técnicas que definem o escopo da V1, incluindo a escolha do microcontrolador, do protocolo de comunicação e da estratégia de injeção, serão documentadas conforme o projeto avança.
