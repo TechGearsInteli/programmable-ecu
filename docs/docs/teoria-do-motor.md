@@ -1,7 +1,7 @@
 ---
 title: Teoria do Motor
 slug: /teoria-do-motor
-sidebar_position: 2
+sidebar_position: 4
 ---
 
 # Teoria do Motor a combustão
@@ -48,14 +48,15 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 1: Resumo dos quatro tempos do motor</strong></small>
 
-| Tempo | Movimento do pistão | Válvulas | Ângulo do virabrequim | O que acontece |
-|-------|--------------------|----------|-----------------------|----------------|
-| 1. Admissão | PMS → PMI (desce) | Admissão aberta | 0° – 180° | Entrada da mistura ar-combustível |
-| 2. Compressão | PMI → PMS (sobe) | Ambas fechadas | 180° – 360° | Mistura comprimida; faísca antes do PMS |
-| 3. Combustão | PMS → PMI (desce) | Ambas fechadas | 360° – 540° | Queima empurra o pistão — gera potência |
-| 4. Escape | PMI → PMS (sobe) | Escape aberta | 540° – 720° | Expulsão dos gases queimados |
+| Tempo         | Movimento do pistão | Válvulas        | Ângulo do virabrequim | O que acontece                          |
+| ------------- | ------------------- | --------------- | --------------------- | --------------------------------------- |
+| 1. Admissão   | PMS → PMI (desce)   | Admissão aberta | 0° – 180°             | Entrada da mistura ar-combustível       |
+| 2. Compressão | PMI → PMS (sobe)    | Ambas fechadas  | 180° – 360°           | Mistura comprimida; faísca antes do PMS |
+| 3. Combustão  | PMS → PMI (desce)   | Ambas fechadas  | 360° – 540°           | Queima empurra o pistão — gera potência |
+| 4. Escape     | PMI → PMS (sobe)    | Escape aberta   | 540° – 720°           | Expulsão dos gases queimados            |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## O papel da ECU em cada tempo
@@ -68,7 +69,7 @@ flowchart LR
 
 ### Na compressão — preparar a ignição
 
-&emsp;Com as válvulas fechadas, a ECU prepara a faísca. Ela consulta o **mapa de ignição** para obter o avanço adequado àquela combinação de rotação e carga, e carrega a bobina pelo tempo necessário (o *dwell*) para que a centelha tenha energia suficiente. O objetivo é disparar a vela no instante exato, alguns graus **antes do PMS**, de modo que a pressão máxima da combustão ocorra logo após o PMS.
+&emsp;Com as válvulas fechadas, a ECU prepara a faísca. Ela consulta o **mapa de ignição** para obter o avanço adequado àquela combinação de rotação e carga, e carrega a bobina pelo tempo necessário (o _dwell_) para que a centelha tenha energia suficiente. O objetivo é disparar a vela no instante exato, alguns graus **antes do PMS**, de modo que a pressão máxima da combustão ocorra logo após o PMS.
 
 ### Na combustão — disparar a faísca no instante certo
 
@@ -81,19 +82,20 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 2: Ação da ECU em cada tempo do motor</strong></small>
 
-| Tempo | Sensores principais lidos | Decisão / comando da ECU |
-|-------|---------------------------|--------------------------|
-| 1. Admissão | MAP, RPM (CKP), TPS, IAT | Calcula a carga de ar e comanda o tempo de injeção (mistura ar-combustível) |
-| 2. Compressão | RPM (CKP), carga, CLT | Consulta o mapa de ignição, define o avanço e carrega a bobina (*dwell*) |
-| 3. Combustão | RPM (CKP), (detonação) | Dispara a faísca no ângulo exato para máximo torque sem detonação |
-| 4. Escape | Sonda lambda (O₂) | Mede a mistura queimada e corrige o combustível em malha fechada |
+| Tempo         | Sensores principais lidos | Decisão / comando da ECU                                                    |
+| ------------- | ------------------------- | --------------------------------------------------------------------------- |
+| 1. Admissão   | MAP, RPM (CKP), TPS, IAT  | Calcula a carga de ar e comanda o tempo de injeção (mistura ar-combustível) |
+| 2. Compressão | RPM (CKP), carga, CLT     | Consulta o mapa de ignição, define o avanço e carrega a bobina (_dwell_)    |
+| 3. Combustão  | RPM (CKP), (detonação)    | Dispara a faísca no ângulo exato para máximo torque sem detonação           |
+| 4. Escape     | Sonda lambda (O₂)         | Mede a mistura queimada e corrige o combustível em malha fechada            |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## Mistura ar-combustível e lambda
 
-&emsp;Para o motor funcionar bem, o ar e o combustível precisam entrar no cilindro em uma proporção correta. Essa proporção é descrita de duas formas equivalentes: a **relação ar-combustível (AFR, do inglês *Air-Fuel Ratio*)** e o **lambda (λ)**.
+&emsp;Para o motor funcionar bem, o ar e o combustível precisam entrar no cilindro em uma proporção correta. Essa proporção é descrita de duas formas equivalentes: a **relação ar-combustível (AFR, do inglês _Air-Fuel Ratio_)** e o **lambda (λ)**.
 
 &emsp;A AFR é a razão entre a massa de ar e a massa de combustível admitidas. Existe uma proporção em que todo o combustível queima de forma completa, sem sobra de ar nem de combustível, chamada **mistura estequiométrica**. Para a gasolina, essa proporção é de aproximadamente **14,7:1** — cerca de 14,7 partes de ar para cada parte de combustível, em massa.
 
@@ -120,18 +122,19 @@ flowchart LR
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 3: Faixas de lambda e seus efeitos</strong></small>
 
-| Condição | Lambda (λ) | AFR (gasolina) | Efeito principal |
-|----------|------------|----------------|------------------|
-| Rica | &lt; 1 (ex.: 0,85) | &lt; 14,7 (ex.: 12,5:1) | Mais potência e proteção térmica; mais consumo e emissões |
-| Estequiométrica | = 1 | 14,7:1 | Queima completa; condição ideal para o catalisador |
-| Pobre | &gt; 1 (ex.: 1,05) | &gt; 14,7 (ex.: 15,4:1) | Mais economia; risco de detonação e superaquecimento |
+| Condição        | Lambda (λ)         | AFR (gasolina)          | Efeito principal                                          |
+| --------------- | ------------------ | ----------------------- | --------------------------------------------------------- |
+| Rica            | &lt; 1 (ex.: 0,85) | &lt; 14,7 (ex.: 12,5:1) | Mais potência e proteção térmica; mais consumo e emissões |
+| Estequiométrica | = 1                | 14,7:1                  | Queima completa; condição ideal para o catalisador        |
+| Pobre           | &gt; 1 (ex.: 1,05) | &gt; 14,7 (ex.: 15,4:1) | Mais economia; risco de detonação e superaquecimento      |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## Os sensores que a ECU lê
 
-&emsp;A ECU só consegue calcular injeção e ignição porque "enxerga" o estado do motor através de sensores. Cada sensor converte uma grandeza física (rotação, pressão, temperatura, posição) em um **sinal elétrico** que o microcontrolador — o pequeno computador (chip) que executa a ECU — consegue ler. Esses sinais se dividem em dois tipos: **digitais** (pulsos que alternam entre dois níveis de tensão; cada transição entre os níveis, a subida ou a descida do pulso, é chamada de *borda*, e é nela que a ECU detecta o pulso — seja por *interrupção*, quando o processador reage no instante exato de cada pulso, seja por *temporizador*, que mede o tempo entre pulsos) e **analógicos** (uma tensão contínua proporcional à grandeza, lida pelo conversor analógico-digital, o ADC). Os cinco sensores principais de entrada são descritos a seguir.
+&emsp;A ECU só consegue calcular injeção e ignição porque "enxerga" o estado do motor através de sensores. Cada sensor converte uma grandeza física (rotação, pressão, temperatura, posição) em um **sinal elétrico** que o microcontrolador — o pequeno computador (chip) que executa a ECU — consegue ler. Esses sinais se dividem em dois tipos: **digitais** (pulsos que alternam entre dois níveis de tensão; cada transição entre os níveis, a subida ou a descida do pulso, é chamada de _borda_, e é nela que a ECU detecta o pulso — seja por _interrupção_, quando o processador reage no instante exato de cada pulso, seja por _temporizador_, que mede o tempo entre pulsos) e **analógicos** (uma tensão contínua proporcional à grandeza, lida pelo conversor analógico-digital, o ADC). Os cinco sensores principais de entrada são descritos a seguir.
 
 &emsp;**CKP — posição do virabrequim.** É o sensor mais importante para o sincronismo. Ele lê os dentes de uma roda fônica presa ao virabrequim (tipicamente uma roda "36−1", com um dente faltando que serve de referência de posição). A partir desses pulsos, a ECU calcula a **rotação (RPM)** e sabe em que ângulo o motor está, para agendar injeção e faísca. Produz um **sinal digital** de pulsos. Há duas tecnologias comuns: o sensor de **relutância variável** (indutivo — funciona como um pequeno gerador, em que cada dente que passa induz a tensão), que gera uma onda de tensão alternada cuja frequência e amplitude crescem com a rotação; e o sensor de **efeito Hall** (eletrônico, alimentado por tensão), que entrega uma onda quadrada limpa entre 0 e 5 V.
 
@@ -139,40 +142,41 @@ flowchart LR
 
 &emsp;**TPS — posição da borboleta.** Indica o quanto o acelerador está aberto, em porcentagem, revelando a **demanda do condutor**. É um **potenciômetro** (resistor variável) e produz um **sinal analógico**, uma tensão que cresce com a abertura (tipicamente ~0,5 V fechado a ~4,5 V em plena abertura). Sua taxa de variação é usada no enriquecimento de aceleração.
 
-&emsp;**CLT — temperatura do líquido de arrefecimento.** Informa se o motor está frio ou já aquecido, base para a correção de partida a frio. É um **termistor NTC** (*Negative Temperature Coefficient*): sua resistência **diminui** conforme a temperatura sobe. Ligado em um divisor de tensão (um arranjo de dois resistores que transforma a variação de resistência do sensor em uma variação de tensão que a ECU consegue medir), produz um **sinal analógico** não linear, que a ECU converte em °C por uma tabela.
+&emsp;**CLT — temperatura do líquido de arrefecimento.** Informa se o motor está frio ou já aquecido, base para a correção de partida a frio. É um **termistor NTC** (_Negative Temperature Coefficient_): sua resistência **diminui** conforme a temperatura sobe. Ligado em um divisor de tensão (um arranjo de dois resistores que transforma a variação de resistência do sensor em uma variação de tensão que a ECU consegue medir), produz um **sinal analógico** não linear, que a ECU converte em °C por uma tabela.
 
 &emsp;**IAT — temperatura do ar admitido.** Mede a temperatura do ar que entra, necessária para corrigir a **densidade** do ar no cálculo da massa (ar quente é menos denso e contém menos oxigênio). Funciona como o CLT: é um **termistor NTC** lido como **sinal analógico** por divisor de tensão.
 
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 4: Sensores de entrada da ECU e seus sinais elétricos</strong></small>
 
-| Sensor | Grandeza medida | Tipo de sinal elétrico | Como a ECU lê |
-|--------|-----------------|------------------------|---------------|
-| CKP (virabrequim) | Posição e rotação (RPM) | Digital (trem de pulsos) | Interrupção/temporizador por borda |
-| MAP (coletor) | Pressão de admissão (carga) | Analógico (tensão proporcional à pressão) | ADC |
-| TPS (borboleta) | Abertura da borboleta (%) | Analógico (potenciômetro) | ADC |
-| CLT (arrefecimento) | Temperatura do motor | Analógico (termistor NTC) | ADC + tabela de conversão |
-| IAT (ar admitido) | Temperatura do ar | Analógico (termistor NTC) | ADC + tabela de conversão |
+| Sensor              | Grandeza medida             | Tipo de sinal elétrico                    | Como a ECU lê                      |
+| ------------------- | --------------------------- | ----------------------------------------- | ---------------------------------- |
+| CKP (virabrequim)   | Posição e rotação (RPM)     | Digital (trem de pulsos)                  | Interrupção/temporizador por borda |
+| MAP (coletor)       | Pressão de admissão (carga) | Analógico (tensão proporcional à pressão) | ADC                                |
+| TPS (borboleta)     | Abertura da borboleta (%)   | Analógico (potenciômetro)                 | ADC                                |
+| CLT (arrefecimento) | Temperatura do motor        | Analógico (termistor NTC)                 | ADC + tabela de conversão          |
+| IAT (ar admitido)   | Temperatura do ar           | Analógico (termistor NTC)                 | ADC + tabela de conversão          |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 &emsp;A correspondência desses sensores com os dados disponíveis via OBD-II na Fase 1 está detalhada na página de [Arquitetura](/arquitetura).
 
 ## Os injetores de combustível
 
-&emsp;O injetor é uma **válvula elétrica** acionada por uma **bobina interna** (por isso é chamado de *solenoide*): quando a ECU energiza essa bobina do injetor, a válvula abre e o combustível pressurizado é pulverizado; quando a ECU corta a energia, a válvula fecha. Como o combustível chega ao injetor sob pressão constante e regulada, a **quantidade injetada depende basicamente de quanto tempo o injetor fica aberto**.
+&emsp;O injetor é uma **válvula elétrica** acionada por uma **bobina interna** (por isso é chamado de _solenoide_): quando a ECU energiza essa bobina do injetor, a válvula abre e o combustível pressurizado é pulverizado; quando a ECU corta a energia, a válvula fecha. Como o combustível chega ao injetor sob pressão constante e regulada, a **quantidade injetada depende basicamente de quanto tempo o injetor fica aberto**.
 
 ### Tempo de injeção (pulse width)
 
-&emsp;O **tempo de injeção**, ou *pulse width*, é a duração (em milissegundos) em que a ECU mantém o injetor aberto a cada ciclo. Quanto maior esse tempo, mais combustível entra. Ele **varia o tempo todo** porque a quantidade de combustível necessária muda conforme a condição: em marcha lenta, com pouco ar entrando, o tempo é curto (poucos ms); em plena carga e alta rotação, com muito ar, o tempo é bem maior. A ECU calcula esse tempo a partir da estimativa de ar (carga), do lambda alvo e das correções — ou seja, o tempo de injeção é a "saída" de todo o cálculo de combustível.
+&emsp;O **tempo de injeção**, ou _pulse width_, é a duração (em milissegundos) em que a ECU mantém o injetor aberto a cada ciclo. Quanto maior esse tempo, mais combustível entra. Ele **varia o tempo todo** porque a quantidade de combustível necessária muda conforme a condição: em marcha lenta, com pouco ar entrando, o tempo é curto (poucos ms); em plena carga e alta rotação, com muito ar, o tempo é bem maior. A ECU calcula esse tempo a partir da estimativa de ar (carga), do lambda alvo e das correções — ou seja, o tempo de injeção é a "saída" de todo o cálculo de combustível.
 
 ### Alta vs baixa impedância
 
-&emsp;A *impedância* de um injetor é, na prática, a **resistência elétrica** da sua bobina — a oposição que ela oferece à passagem de corrente, medida em *ohms*, cujo símbolo é a letra grega ômega (Ω). Conforme essa resistência, os injetores se dividem em dois tipos; quanto menor ela for, maior a corrente (medida em ampères, A) que circula ao energizar o injetor, e isso muda **como a ECU precisa acioná-los**:
+&emsp;A _impedância_ de um injetor é, na prática, a **resistência elétrica** da sua bobina — a oposição que ela oferece à passagem de corrente, medida em _ohms_, cujo símbolo é a letra grega ômega (Ω). Conforme essa resistência, os injetores se dividem em dois tipos; quanto menor ela for, maior a corrente (medida em ampères, A) que circula ao energizar o injetor, e isso muda **como a ECU precisa acioná-los**:
 
 - **Alta impedância (saturados, ~12–16 Ω):** podem ser acionados de forma simples, aplicando a tensão da bateria diretamente — a própria resistência limita a corrente a um valor seguro (cerca de 1 A). Exigem um driver mais simples e são os mais comuns em veículos de fábrica.
-- **Baixa impedância (*peak-and-hold*, ~2–5 Ω):** deixam passar muito mais corrente, então precisam de um driver que aplique um **pico** de corrente alta para abrir rápido e depois reduza para uma corrente de **manutenção** menor, suficiente para mantê-los abertos sem superaquecer. Sem esse controle de corrente, a bobina esquentaria e poderia queimar. São usados em injetores de alta vazão.
+- **Baixa impedância (_peak-and-hold_, ~2–5 Ω):** deixam passar muito mais corrente, então precisam de um driver que aplique um **pico** de corrente alta para abrir rápido e depois reduza para uma corrente de **manutenção** menor, suficiente para mantê-los abertos sem superaquecer. Sem esse controle de corrente, a bobina esquentaria e poderia queimar. São usados em injetores de alta vazão.
 
 ### Dead time (tempo morto)
 
@@ -187,14 +191,15 @@ tempo comandado = tempo de injeção calculado + dead time(tensão da bateria)
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 5: Comparação entre injetores de alta e baixa impedância</strong></small>
 
-| Característica | Alta impedância (saturado) | Baixa impedância (peak-and-hold) |
-|----------------|----------------------------|----------------------------------|
-| Resistência da bobina | ~12–16 Ω | ~2–5 Ω |
-| Corrente | Baixa, limitada pela resistência (~1 A) | Alta; exige controle de pico e manutenção |
-| Driver necessário | Simples (saturado) | Complexo (peak-and-hold) |
-| Uso típico | Vazões baixas e médias; veículos de fábrica | Vazões altas; aplicações de alto desempenho |
+| Característica        | Alta impedância (saturado)                  | Baixa impedância (peak-and-hold)            |
+| --------------------- | ------------------------------------------- | ------------------------------------------- |
+| Resistência da bobina | ~12–16 Ω                                    | ~2–5 Ω                                      |
+| Corrente              | Baixa, limitada pela resistência (~1 A)     | Alta; exige controle de pico e manutenção   |
+| Driver necessário     | Simples (saturado)                          | Complexo (peak-and-hold)                    |
+| Uso típico            | Vazões baixas e médias; veículos de fábrica | Vazões altas; aplicações de alto desempenho |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## O mapa de combustível e a interpolação
@@ -206,14 +211,15 @@ tempo comandado = tempo de injeção calculado + dead time(tensão da bateria)
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 6: Exemplo de mapa de combustível 4×4 (tempo de injeção em ms)</strong></small>
 
-|  | MAP 30 kPa | MAP 50 kPa | MAP 70 kPa | MAP 90 kPa |
-|--------------|------------|------------|------------|------------|
-| **1000 RPM** | 2,0 | 3,0 | 4,0 | 5,0 |
-| **2000 RPM** | 2,4 | 3,6 | 4,8 | 6,0 |
-| **3000 RPM** | 2,8 | 4,2 | 5,6 | 7,0 |
-| **4000 RPM** | 3,2 | 4,8 | 6,4 | 8,0 |
+|              | MAP 30 kPa | MAP 50 kPa | MAP 70 kPa | MAP 90 kPa |
+| ------------ | ---------- | ---------- | ---------- | ---------- |
+| **1000 RPM** | 2,0        | 3,0        | 4,0        | 5,0        |
+| **2000 RPM** | 2,4        | 3,6        | 4,8        | 6,0        |
+| **3000 RPM** | 2,8        | 4,2        | 5,6        | 7,0        |
+| **4000 RPM** | 3,2        | 4,8        | 6,4        | 8,0        |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ### Interpolação: encontrar o valor entre as células
@@ -245,41 +251,42 @@ Passo 2 — interpolar pela carga (60 kPa está no meio entre 50 e 70):
 
 &emsp;**Corte de combustível (desaceleração e limitador de rotação).** Em duas situações a ECU faz o oposto — **corta** o combustível:
 
-- **Corte na desaceleração (*cut-off*):** quando o condutor tira o pé com o motor em rotação alta e a borboleta fechada, o carro está "empurrando" o motor pelas rodas e não há necessidade de combustível. A ECU **corta a injeção**, economizando combustível e reduzindo emissões, e a religa antes de a rotação cair para a marcha lenta.
-- **Limitador de rotação (*rev limiter*):** para proteger o motor de girar além do limite seguro, a ECU corta o combustível (e/ou a faísca) ao atingir a rotação máxima, impedindo danos mecânicos.
+- **Corte na desaceleração (_cut-off_):** quando o condutor tira o pé com o motor em rotação alta e a borboleta fechada, o carro está "empurrando" o motor pelas rodas e não há necessidade de combustível. A ECU **corta a injeção**, economizando combustível e reduzindo emissões, e a religa antes de a rotação cair para a marcha lenta.
+- **Limitador de rotação (_rev limiter_):** para proteger o motor de girar além do limite seguro, a ECU corta o combustível (e/ou a faísca) ao atingir a rotação máxima, impedindo danos mecânicos.
 
 <div align="center">
 <small><strong style={{fontSize: '12px'}}>Quadro 7: Correções de injeção aplicadas sobre o mapa base</strong></small>
 
-| Correção | Quando ocorre (gatilho) | O que a ECU faz | Por quê |
-|----------|-------------------------|-----------------|---------|
-| Aquecimento / partida a frio | Motor frio (CLT baixa) | Adiciona combustível, decrescente até a temperatura normal | Combustível condensa e vaporiza mal a frio |
-| Enriquecimento de aceleração | Abertura rápida da borboleta (TPS subindo) | Injeta um pulso extra transitório de combustível | O combustível atrasa em relação ao ar; evita mistura pobre |
-| Corte na desaceleração | Pé fora do acelerador + RPM alta + borboleta fechada | Corta a injeção temporariamente | Não há demanda de potência; economiza e reduz emissões |
-| Limitador de rotação | RPM atinge o limite máximo | Corta combustível e/ou faísca | Protege o motor contra excesso de rotação |
+| Correção                     | Quando ocorre (gatilho)                              | O que a ECU faz                                            | Por quê                                                    |
+| ---------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| Aquecimento / partida a frio | Motor frio (CLT baixa)                               | Adiciona combustível, decrescente até a temperatura normal | Combustível condensa e vaporiza mal a frio                 |
+| Enriquecimento de aceleração | Abertura rápida da borboleta (TPS subindo)           | Injeta um pulso extra transitório de combustível           | O combustível atrasa em relação ao ar; evita mistura pobre |
+| Corte na desaceleração       | Pé fora do acelerador + RPM alta + borboleta fechada | Corta a injeção temporariamente                            | Não há demanda de potência; economiza e reduz emissões     |
+| Limitador de rotação         | RPM atinge o limite máximo                           | Corta combustível e/ou faísca                              | Protege o motor contra excesso de rotação                  |
 
 <small style={{marginTop: '4px', fontSize: '10px'}}>Fonte: Material produzido pelo grupo, 2026.</small>
+
 </div>
 
 ## Por que isso importa para o projeto
 
-&emsp;Em um motor de 4 cilindros, os tempos são defasados de 180° entre si, de forma que sempre há um cilindro em combustão a cada meia volta do virabrequim — o que mantém o giro suave. A ECU gerencia a injeção e a ignição de cada cilindro de forma independente, na ordem de queima (comumente 1-3-4-2). Entender esse encadeamento é a base para os dois mapas centrais do projeto, o de combustível e o de ignição, e para a estratégia de leitura em duas fases (OBD-II e sensores diretos) detalhada na página de [Arquitetura](/arquitetura). Na **Fase 1**, a ECU apenas *lê* essas grandezas de um motor real; na **Fase 2**, passa de fato a *comandar* injeção e ignição em cada tempo.
+&emsp;Em um motor de 4 cilindros, os tempos são defasados de 180° entre si, de forma que sempre há um cilindro em combustão a cada meia volta do virabrequim — o que mantém o giro suave. A ECU gerencia a injeção e a ignição de cada cilindro de forma independente, na ordem de queima (comumente 1-3-4-2). Entender esse encadeamento é a base para os dois mapas centrais do projeto, o de combustível e o de ignição, e para a estratégia de leitura em duas fases (OBD-II e sensores diretos) detalhada na página de [Arquitetura](/arquitetura). Na **Fase 1**, a ECU apenas _lê_ essas grandezas de um motor real; na **Fase 2**, passa de fato a _comandar_ injeção e ignição em cada tempo.
 
 ## Referências
 
-- HowStuffWorks. *What is the four-stroke combustion cycle?* Disponível em: [https://auto.howstuffworks.com/four-stroke-combustion-cycle.htm](https://auto.howstuffworks.com/four-stroke-combustion-cycle.htm). Acesso em: 9 jun. 2026.
-- HowStuffWorks. *How Car Engines Work.* Disponível em: [https://auto.howstuffworks.com/engine.htm](https://auto.howstuffworks.com/engine.htm). Acesso em: 9 jun. 2026.
-- FENSKE, Jason. *Engineering Explained* (canal de referência no YouTube). Disponível em: [https://www.youtube.com/@EngineeringExplained](https://www.youtube.com/@EngineeringExplained). Acesso em: 9 jun. 2026.
-- WIKIPEDIA. *Four-stroke engine.* Disponível em: [https://en.wikipedia.org/wiki/Four-stroke_engine](https://en.wikipedia.org/wiki/Four-stroke_engine). Acesso em: 9 jun. 2026.
-- HEYWOOD, John B. *Internal Combustion Engine Fundamentals.* 2. ed. New York: McGraw-Hill, 2018.
-- BOSCH. *Automotive Handbook.* 10. ed. Robert Bosch GmbH, 2018.
-- SUMMIT RACING. *Engine Basics — Air/Fuel Mixture.* Disponível em: [https://help.summitracing.com/knowledgebase/article/SR-05230/en-us](https://help.summitracing.com/knowledgebase/article/SR-05230/en-us). Acesso em: 10 jun. 2026.
-- HIGH PERFORMANCE ACADEMY. *Why Lambda Is Better Than AFR.* Disponível em: [https://www.hpacademy.com/technical-articles/afr-vs-lambda/](https://www.hpacademy.com/technical-articles/afr-vs-lambda/). Acesso em: 10 jun. 2026.
-- AMETHERM. *What Is An NTC Thermistor.* Disponível em: [https://www.ametherm.com/thermistor/what-is-an-ntc-thermistor](https://www.ametherm.com/thermistor/what-is-an-ntc-thermistor). Acesso em: 10 jun. 2026.
-- SPEEDUINO. *Injector Characteristics* (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Injector_Characteristics](https://wiki.speeduino.com/en/configuration/Injector_Characteristics). Acesso em: 10 jun. 2026.
-- SPEEDUINO. *Warmup* (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Warmup](https://wiki.speeduino.com/en/configuration/Warmup). Acesso em: 10 jun. 2026.
-- SPEEDUINO. *Acceleration Wizard* (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Acceleration_Wizard](https://wiki.speeduino.com/en/configuration/Acceleration_Wizard). Acesso em: 10 jun. 2026.
-- SPEEDUINO. *Tuning* (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/tuning/Tuning](https://wiki.speeduino.com/en/tuning/Tuning). Acesso em: 10 jun. 2026.
-- WIKIPEDIA. *Bilinear interpolation.* Disponível em: [https://en.wikipedia.org/wiki/Bilinear_interpolation](https://en.wikipedia.org/wiki/Bilinear_interpolation). Acesso em: 10 jun. 2026.
+- HowStuffWorks. _What is the four-stroke combustion cycle?_ Disponível em: [https://auto.howstuffworks.com/four-stroke-combustion-cycle.htm](https://auto.howstuffworks.com/four-stroke-combustion-cycle.htm). Acesso em: 9 jun. 2026.
+- HowStuffWorks. _How Car Engines Work._ Disponível em: [https://auto.howstuffworks.com/engine.htm](https://auto.howstuffworks.com/engine.htm). Acesso em: 9 jun. 2026.
+- FENSKE, Jason. _Engineering Explained_ (canal de referência no YouTube). Disponível em: [https://www.youtube.com/@EngineeringExplained](https://www.youtube.com/@EngineeringExplained). Acesso em: 9 jun. 2026.
+- WIKIPEDIA. _Four-stroke engine._ Disponível em: [https://en.wikipedia.org/wiki/Four-stroke_engine](https://en.wikipedia.org/wiki/Four-stroke_engine). Acesso em: 9 jun. 2026.
+- HEYWOOD, John B. _Internal Combustion Engine Fundamentals._ 2. ed. New York: McGraw-Hill, 2018.
+- BOSCH. _Automotive Handbook._ 10. ed. Robert Bosch GmbH, 2018.
+- SUMMIT RACING. _Engine Basics — Air/Fuel Mixture._ Disponível em: [https://help.summitracing.com/knowledgebase/article/SR-05230/en-us](https://help.summitracing.com/knowledgebase/article/SR-05230/en-us). Acesso em: 10 jun. 2026.
+- HIGH PERFORMANCE ACADEMY. _Why Lambda Is Better Than AFR._ Disponível em: [https://www.hpacademy.com/technical-articles/afr-vs-lambda/](https://www.hpacademy.com/technical-articles/afr-vs-lambda/). Acesso em: 10 jun. 2026.
+- AMETHERM. _What Is An NTC Thermistor._ Disponível em: [https://www.ametherm.com/thermistor/what-is-an-ntc-thermistor](https://www.ametherm.com/thermistor/what-is-an-ntc-thermistor). Acesso em: 10 jun. 2026.
+- SPEEDUINO. _Injector Characteristics_ (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Injector_Characteristics](https://wiki.speeduino.com/en/configuration/Injector_Characteristics). Acesso em: 10 jun. 2026.
+- SPEEDUINO. _Warmup_ (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Warmup](https://wiki.speeduino.com/en/configuration/Warmup). Acesso em: 10 jun. 2026.
+- SPEEDUINO. _Acceleration Wizard_ (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/configuration/Acceleration_Wizard](https://wiki.speeduino.com/en/configuration/Acceleration_Wizard). Acesso em: 10 jun. 2026.
+- SPEEDUINO. _Tuning_ (Speeduino Manual). Disponível em: [https://wiki.speeduino.com/en/tuning/Tuning](https://wiki.speeduino.com/en/tuning/Tuning). Acesso em: 10 jun. 2026.
+- WIKIPEDIA. _Bilinear interpolation._ Disponível em: [https://en.wikipedia.org/wiki/Bilinear_interpolation](https://en.wikipedia.org/wiki/Bilinear_interpolation). Acesso em: 10 jun. 2026.
 
 </div>
