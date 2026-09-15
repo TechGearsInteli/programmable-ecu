@@ -1,15 +1,16 @@
 /*
-  Programmable ECU — protecoes RPM e CLT (#140)
+  Programmable ECU — mapa na flash NVS (#141)
 
-  Corta PWf (e portanto os 4 GPIOs) se RPM >= 3000 ou CLT >= 105 C.
-  Na lenta simulada ha um pico curto de CLT para o corte aparecer.
-  ISR so dispara injetor se injPwUs >= 400.
+  Boot: carrega mapa com checksum; se falhar, usa o padrao.
+  Serial: T = altera cel 0,0 | S = grava | D = restaura padrao.
+  Reset depois de S deve manter o valor. Nao grava na ISR.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
 */
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
+#include <Preferences.h>
 
 static const int kPulsePin = 4;
 static const int kInjPins[4] = {2, 14, 15, 33};
@@ -144,6 +145,71 @@ static const uint16_t kFuelMap[8][8] = {
     {1300, 1540, 1790, 2080, 2360, 2630, 2850, 2990},
 };
 
+static uint16_t fuelMap[8][8];
+static uint8_t mapFromNvs = 0;
+static Preferences ecuPrefs;
+
+static uint16_t mapChecksum(const uint16_t map[8][8]) {
+  uint32_t s = 0xEC01;
+  for (uint8_t i = 0; i < 8; i++) {
+    for (uint8_t j = 0; j < 8; j++) {
+      s += map[i][j];
+      s ^= (uint32_t)map[i][j] << ((i + j) & 7);
+    }
+  }
+  return (uint16_t)(s ^ (s >> 16));
+}
+
+static void mapLoadDefault() {
+  memcpy(fuelMap, kFuelMap, sizeof(fuelMap));
+  mapFromNvs = 0;
+}
+
+static void mapSaveNvs() {
+  const uint16_t crc = mapChecksum(fuelMap);
+  ecuPrefs.begin("ecu", false);
+  ecuPrefs.putUShort("magic", 0xEC01);
+  ecuPrefs.putUShort("crc", crc);
+  ecuPrefs.putBytes("map", fuelMap, sizeof(fuelMap));
+  ecuPrefs.end();
+  mapFromNvs = 1;
+  Serial.printf("[nvs] gravado crc=%u cel00=%u\n", crc, fuelMap[0][0]);
+}
+
+static void mapLoadNvs() {
+  mapLoadDefault();
+  ecuPrefs.begin("ecu", true);
+  const uint16_t magic = ecuPrefs.getUShort("magic", 0);
+  const uint16_t crc = ecuPrefs.getUShort("crc", 0);
+  uint16_t loaded[8][8];
+  const size_t n = ecuPrefs.getBytes("map", loaded, sizeof(loaded));
+  ecuPrefs.end();
+  if (magic != 0xEC01 || n != sizeof(loaded) || mapChecksum(loaded) != crc) {
+    Serial.println("[nvs] padrao (vazio ou checksum ruim)");
+    return;
+  }
+  memcpy(fuelMap, loaded, sizeof(fuelMap));
+  mapFromNvs = 1;
+  Serial.printf("[nvs] ok crc=%u cel00=%u\n", crc, fuelMap[0][0]);
+}
+
+static void mapPollSerial() {
+  if (!Serial.available()) {
+    return;
+  }
+  const char c = (char)Serial.read();
+  if (c == 'T' || c == 't') {
+    fuelMap[0][0] = (uint16_t)(fuelMap[0][0] + 50);
+    Serial.printf("[nvs] teste cel00=%u  (envie S e reset)\n", fuelMap[0][0]);
+  } else if (c == 'S' || c == 's') {
+    mapSaveNvs();
+  } else if (c == 'D' || c == 'd') {
+    mapLoadDefault();
+    mapSaveNvs();
+    Serial.println("[nvs] restaurado padrao");
+  }
+}
+
 static uint8_t axisLowIndex(const uint16_t *axis, uint8_t n, uint16_t x) {
   if (x <= axis[0]) {
     return 0;
@@ -185,10 +251,10 @@ static uint16_t lookupFuelPwX100(uint16_t rpm, uint16_t mapKpa) {
   const uint16_t map0 = kMapAxis[j];
   const uint16_t map1 = kMapAxis[j + 1];
 
-  const uint16_t v00 = kFuelMap[i][j];
-  const uint16_t v10 = kFuelMap[i + 1][j];
-  const uint16_t v01 = kFuelMap[i][j + 1];
-  const uint16_t v11 = kFuelMap[i + 1][j + 1];
+  const uint16_t v00 = fuelMap[i][j];
+  const uint16_t v10 = fuelMap[i + 1][j];
+  const uint16_t v01 = fuelMap[i][j + 1];
+  const uint16_t v11 = fuelMap[i + 1][j + 1];
 
   const uint16_t v0 = lerpInt(rpm0, rpm1, v00, v10, rpm);
   const uint16_t v1 = lerpInt(rpm0, rpm1, v01, v11, rpm);
@@ -460,7 +526,7 @@ void displayBegin() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 12);
-  tft.print("ECU  protecao  #140");
+  tft.print("ECU  NVS mapa  #141");
   tft.setCursor(12, 44);
   tft.printf("roda  36-1   GPIO %d", kPulsePin);
   Serial.println("[display] init ok");
@@ -619,9 +685,9 @@ void displayTick() {
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf("[prot] rpm=%u clt=%d LIM=%u HOT=%u PWf=%u.%02u n=%u/%u/%u/%u\n",
-                  measuredRpm, sensors.cltC, protRpm, protClt,
-                  fuelPwFinalX100 / 100, fuelPwFinalX100 % 100, c0, c1, c2, c3);
+    Serial.printf("[nvs] src=%s cel00=%u rpm=%u PWf=%u.%02u\n",
+                  mapFromNvs ? "flash" : "padrao", fuelMap[0][0], measuredRpm,
+                  fuelPwFinalX100 / 100, fuelPwFinalX100 % 100);
   }
 }
 
@@ -629,13 +695,15 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #140 protecoes");
+  Serial.println("programmable-ecu #141 NVS  (T teste, S grava, D padrao)");
   engineStartMs = millis();
+  mapLoadNvs();
   displayBegin();
   ckpBeginSimulated();
 }
 
 void loop() {
+  mapPollSerial();
   simTick();
   displayTick();
 }
