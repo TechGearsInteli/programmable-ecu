@@ -1,11 +1,11 @@
 /*
-  Programmable ECU — sensores simulados MAP/TPS/CLT/IAT/lambda (#135)
+  Programmable ECU — interpolacao bilinear do mapa de combustivel (#136)
 
-  Continua o CKP 36-1 no GPIO 4. Os outros sensores sao numeros
-  derivados do mesmo perfil (partida/lenta/acelerada), sem ADC/OBD.
+  CKP e sensores continuam simulados. O mapa 2D (RPM x MAP) e consultado
+  no loop, fora da ISR. A TFT redesenha a cada 400 ms de proposito:
+  leitura/calculo primeiro, tela depois.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
-  Upload com TFT: se falhar, segura BOOT (D0 = GPIO12).
 */
 
 #define LGFX_USE_V1
@@ -102,6 +102,89 @@ struct EngineSensors {
 };
 
 static EngineSensors sensors = {35, 8, 18, 24, 100};
+static uint32_t measuredRpm = 0;
+static uint16_t fuelPwX100 = 0;
+static uint8_t mapRpmCell = 0;
+static uint8_t mapLoadCell = 0;
+
+static const uint16_t kRpmAxis[] = {800, 1200, 1600, 2000, 2500, 3000, 3500, 4000};
+static const uint16_t kMapAxis[] = {30, 40, 50, 60, 70, 80, 90, 100};
+static const uint8_t kRpmBins = 8;
+static const uint8_t kMapBins = 8;
+
+// Tempo de injetor em centesimos de ms (850 = 8.50 ms).
+static const uint16_t kFuelMap[8][8] = {
+    {820, 910, 1000, 1140, 1280, 1410, 1520, 1600},
+    {850, 950, 1080, 1230, 1390, 1520, 1640, 1710},
+    {910, 1030, 1180, 1350, 1510, 1680, 1800, 1890},
+    {980, 1120, 1290, 1470, 1660, 1840, 1980, 2070},
+    {1060, 1230, 1420, 1630, 1840, 2040, 2200, 2300},
+    {1150, 1340, 1550, 1790, 2020, 2250, 2430, 2540},
+    {1230, 1450, 1680, 1940, 2200, 2450, 2650, 2770},
+    {1300, 1540, 1790, 2080, 2360, 2630, 2850, 2990},
+};
+
+static uint8_t axisLowIndex(const uint16_t *axis, uint8_t n, uint16_t x) {
+  if (x <= axis[0]) {
+    return 0;
+  }
+  if (x >= axis[n - 1]) {
+    return n - 2;
+  }
+  uint8_t i = 0;
+  while (i + 1 < n && axis[i + 1] <= x) {
+    i++;
+  }
+  if (i > n - 2) {
+    i = n - 2;
+  }
+  return i;
+}
+
+static uint16_t lerpInt(uint16_t x0, uint16_t x1, uint16_t y0, uint16_t y1, uint16_t x) {
+  if (x1 == x0) {
+    return y0;
+  }
+  if (x <= x0) {
+    return y0;
+  }
+  if (x >= x1) {
+    return y1;
+  }
+  return (uint16_t)(y0 + ((int32_t)(y1 - y0) * (int32_t)(x - x0)) / (int32_t)(x1 - x0));
+}
+
+static uint16_t lookupFuelPwX100(uint16_t rpm, uint16_t mapKpa) {
+  const uint8_t i = axisLowIndex(kRpmAxis, kRpmBins, rpm);
+  const uint8_t j = axisLowIndex(kMapAxis, kMapBins, mapKpa);
+  mapRpmCell = i;
+  mapLoadCell = j;
+
+  const uint16_t rpm0 = kRpmAxis[i];
+  const uint16_t rpm1 = kRpmAxis[i + 1];
+  const uint16_t map0 = kMapAxis[j];
+  const uint16_t map1 = kMapAxis[j + 1];
+
+  const uint16_t v00 = kFuelMap[i][j];
+  const uint16_t v10 = kFuelMap[i + 1][j];
+  const uint16_t v01 = kFuelMap[i][j + 1];
+  const uint16_t v11 = kFuelMap[i + 1][j + 1];
+
+  const uint16_t v0 = lerpInt(rpm0, rpm1, v00, v10, rpm);
+  const uint16_t v1 = lerpInt(rpm0, rpm1, v01, v11, rpm);
+  return lerpInt(map0, map1, v0, v1, mapKpa);
+}
+
+static void updateMeasuredRpm() {
+  uint32_t revolutionUs;
+  noInterrupts();
+  revolutionUs = revUs;
+  interrupts();
+  if (revolutionUs >= 10000 && revolutionUs <= 300000) {
+    lastGoodRpm = 60000000UL / revolutionUs;
+  }
+  measuredRpm = lastGoodRpm;
+}
 
 static void sensorsSimulate(uint32_t rpm, SimPhase phase) {
   uint32_t tps = 8;
@@ -238,7 +321,7 @@ void displayBegin() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 12);
-  tft.print("ECU  sensores  #135");
+  tft.print("ECU  mapa  #136");
   tft.setCursor(12, 44);
   tft.printf("roda  36-1   GPIO %d", kPulsePin);
   Serial.println("[display] init ok");
@@ -316,6 +399,9 @@ void simTick() {
     simApplyRpm(rpm);
   }
   sensorsSimulate(commandedRpm, simPhase);
+  updateMeasuredRpm();
+  const uint16_t rpmForMap = measuredRpm > 0 ? (uint16_t)measuredRpm : (uint16_t)commandedRpm;
+  fuelPwX100 = lookupFuelPwX100(rpmForMap, sensors.mapKpa);
 }
 
 void displayTick() {
@@ -324,32 +410,24 @@ void displayTick() {
   }
 
   const unsigned long now = millis();
-  if (now - lastUiMs < 200) {
+  if (now - lastUiMs < 400) {
     return;
   }
   lastUiMs = now;
 
-  uint32_t revolutionUs;
   uint8_t isSynced;
   uint8_t tooth;
   noInterrupts();
-  revolutionUs = revUs;
   isSynced = synced;
   tooth = toothIndex;
   interrupts();
 
-  uint32_t measuredRpm = lastGoodRpm;
-  if (revolutionUs >= 10000 && revolutionUs <= 300000) {
-    lastGoodRpm = 60000000UL / revolutionUs;
-    measuredRpm = lastGoodRpm;
-  }
-
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
-  tft.fillRect(12, 72, 460, 236, TFT_BLACK);
+  tft.fillRect(12, 72, 460, 28, TFT_BLACK);
   tft.setCursor(12, 72);
-  tft.printf("RPM %u  %s  sync %s", measuredRpm, phaseName(simPhase),
-             isSynced ? "SIM" : "NAO");
+  tft.printf("RPM %u  %s  %s", measuredRpm, phaseName(simPhase),
+             isSynced ? "OK" : "--");
 
   const int barW = tft.width() - 24;
   const int filled = (int)((measuredRpm * (uint32_t)barW) / 4000UL);
@@ -358,23 +436,21 @@ void displayTick() {
     tft.fillRect(12, 104, filled > barW ? barW : filled, 14, TFT_YELLOW);
   }
 
+  tft.fillRect(12, 128, 460, 120, TFT_BLACK);
   tft.setCursor(12, 132);
-  tft.printf("MAP  %u kPa     TPS  %u %%", sensors.mapKpa, sensors.tpsPct);
+  tft.printf("MAP %u  TPS %u  CLT %d", sensors.mapKpa, sensors.tpsPct, sensors.cltC);
   tft.setCursor(12, 168);
-  tft.printf("CLT  %d C       IAT  %d C", sensors.cltC, sensors.iatC);
+  tft.printf("PW  %u.%02u ms   cel %u,%u", fuelPwX100 / 100, fuelPwX100 % 100,
+             mapRpmCell, mapLoadCell);
   tft.setCursor(12, 204);
-  tft.printf("LAM  %u.%02u      alvo %u", sensors.lambdaX100 / 100,
-             sensors.lambdaX100 % 100, commandedRpm);
-  tft.setCursor(12, 240);
-  tft.printf("dente %u", tooth);
+  tft.printf("LAM %u.%02u  dente %u", sensors.lambdaX100 / 100,
+             sensors.lambdaX100 % 100, tooth);
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf(
-        "[sns] %s RPM=%u MAP=%u TPS=%u CLT=%d IAT=%d LAM=%u.%02u sync=%u\n",
-        phaseName(simPhase), measuredRpm, sensors.mapKpa, sensors.tpsPct,
-        sensors.cltC, sensors.iatC, sensors.lambdaX100 / 100,
-        sensors.lambdaX100 % 100, isSynced);
+    Serial.printf("[map] RPM=%u MAP=%u PW=%u.%02u ms cel=%u,%u\n", measuredRpm,
+                  sensors.mapKpa, fuelPwX100 / 100, fuelPwX100 % 100, mapRpmCell,
+                  mapLoadCell);
   }
 }
 
@@ -382,7 +458,7 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #135 sensores simulados");
+  Serial.println("programmable-ecu #136 mapa bilinear");
   engineStartMs = millis();
   displayBegin();
   ckpBeginSimulated();
