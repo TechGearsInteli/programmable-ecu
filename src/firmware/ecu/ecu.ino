@@ -1,8 +1,9 @@
 /*
-  Programmable ECU — lambda em malha fechada (#139)
+  Programmable ECU — protecoes RPM e CLT (#140)
 
-  xLAM sobe se a sonda simula pobre, desce se rica. So na lenta e motor
-  morno. ISR/CKP intactos. TFT lenta.
+  Corta PWf (e portanto os 4 GPIOs) se RPM >= 3000 ou CLT >= 105 C.
+  Na lenta simulada ha um pico curto de CLT para o corte aparecer.
+  ISR so dispara injetor se injPwUs >= 400.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
 */
@@ -17,6 +18,8 @@ static const uint8_t kMissingSlot = 0;
 static const uint32_t kIdleRpm = 900;
 static const uint32_t kCrankRpm = 280;
 static const uint32_t kRevRpm = 3500;
+static const uint32_t kRpmLimit = 3000;
+static const int16_t kCltLimitC = 105;
 
 enum SimPhase : uint8_t {
   SIM_CRANK = 0,
@@ -117,6 +120,8 @@ static uint16_t corrIatX1000 = 1000;
 static uint16_t corrAccelX1000 = 1000;
 static uint16_t corrCutX1000 = 1000;
 static uint16_t corrLamX1000 = 1000;
+static uint8_t protRpm = 0;
+static uint8_t protClt = 0;
 static unsigned long lastLamMs = 0;
 static uint8_t lastTpsPct = 0;
 static uint8_t mapRpmCell = 0;
@@ -240,6 +245,15 @@ static uint16_t applyFuelCorrections(uint16_t pwMapX100, SimPhase phase) {
   return (uint16_t)v;
 }
 
+static uint16_t applyProtections(uint16_t pw) {
+  protRpm = (measuredRpm >= kRpmLimit) ? 1 : 0;
+  protClt = (sensors.cltC >= kCltLimitC) ? 1 : 0;
+  if (protRpm || protClt) {
+    return 0;
+  }
+  return pw;
+}
+
 static void updateLambdaClosedLoop(SimPhase phase) {
   const unsigned long now = millis();
   if (now - lastLamMs < 80) {
@@ -290,6 +304,13 @@ static void sensorsSimulate(uint32_t rpm, SimPhase phase) {
   }
   sensors.iatC = (int16_t)(24 + sensors.tpsPct / 20);
 
+  if (phase == SIM_IDLE) {
+    const unsigned long idleT = millis() - phaseStartMs;
+    if (idleT > 7000 && idleT < 9000) {
+      sensors.cltC = 110;
+    }
+  }
+
   if (phase == SIM_CRANK) {
     sensors.lambdaX100 = 120;
   } else if (phase == SIM_REV_UP) {
@@ -321,7 +342,7 @@ static const char *phaseName(SimPhase phase) {
 void IRAM_ATTR scheduleInj(uint8_t ch) {
   uint32_t pw = injPwUs;
   if (pw < 400) {
-    pw = 400;
+    return;
   }
   digitalWrite(kInjPins[ch], HIGH);
   injBusy[ch] = 1;
@@ -439,7 +460,7 @@ void displayBegin() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 12);
-  tft.print("ECU  lambda CL  #139");
+  tft.print("ECU  protecao  #140");
   tft.setCursor(12, 44);
   tft.printf("roda  36-1   GPIO %d", kPulsePin);
   Serial.println("[display] init ok");
@@ -532,7 +553,7 @@ void simTick() {
   updateMeasuredRpm();
   const uint16_t rpmForMap = measuredRpm > 0 ? (uint16_t)measuredRpm : (uint16_t)commandedRpm;
   fuelPwX100 = lookupFuelPwX100(rpmForMap, sensors.mapKpa);
-  fuelPwFinalX100 = applyFuelCorrections(fuelPwX100, simPhase);
+  fuelPwFinalX100 = applyProtections(applyFuelCorrections(fuelPwX100, simPhase));
   injPwUs = (uint32_t)fuelPwFinalX100 * 10UL;
 }
 
@@ -565,7 +586,7 @@ void displayTick() {
   tft.fillRect(12, 72, 460, 28, TFT_BLACK);
   tft.setCursor(12, 72);
   tft.printf("RPM %u  %s  %s", measuredRpm, phaseName(simPhase),
-             isSynced ? "OK" : "--");
+             protRpm ? "LIM" : (protClt ? "HOT" : (isSynced ? "OK" : "--")));
 
   const int barW = tft.width() - 24;
   const int filled = (int)((measuredRpm * (uint32_t)barW) / 4000UL);
@@ -598,8 +619,8 @@ void displayTick() {
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf("[lam] LAM=%u.%02u xLAM=%u PWf=%u.%02u n=%u/%u/%u/%u\n",
-                  sensors.lambdaX100 / 100, sensors.lambdaX100 % 100, corrLamX1000,
+    Serial.printf("[prot] rpm=%u clt=%d LIM=%u HOT=%u PWf=%u.%02u n=%u/%u/%u/%u\n",
+                  measuredRpm, sensors.cltC, protRpm, protClt,
                   fuelPwFinalX100 / 100, fuelPwFinalX100 % 100, c0, c1, c2, c3);
   }
 }
@@ -608,7 +629,7 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #139 lambda malha fechada");
+  Serial.println("programmable-ecu #140 protecoes");
   engineStartMs = millis();
   displayBegin();
   ckpBeginSimulated();
