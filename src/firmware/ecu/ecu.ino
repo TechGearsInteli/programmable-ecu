@@ -1,8 +1,8 @@
 /*
-  Programmable ECU — CKP / RPM simulado, roda 36-1 (#134)
+  Programmable ECU — sensores simulados MAP/TPS/CLT/IAT/lambda (#135)
 
-  Perfil mais perto de um motor: partida (~280), pega ate lenta (~900)
-  com oscilacao, depois uma acelerada e volta. Continua tudo no GPIO 4.
+  Continua o CKP 36-1 no GPIO 4. Os outros sensores sao numeros
+  derivados do mesmo perfil (partida/lenta/acelerada), sem ADC/OBD.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
   Upload com TFT: se falhar, segura BOOT (D0 = GPIO12).
@@ -90,7 +90,50 @@ static unsigned long phaseStartMs = 0;
 static unsigned long lastSimMs = 0;
 static unsigned long lastUiMs = 0;
 static unsigned long lastSerialMs = 0;
+static unsigned long engineStartMs = 0;
 static bool tftReady = false;
+
+struct EngineSensors {
+  uint16_t mapKpa;
+  uint8_t tpsPct;
+  int16_t cltC;
+  int16_t iatC;
+  uint16_t lambdaX100;
+};
+
+static EngineSensors sensors = {35, 8, 18, 24, 100};
+
+static void sensorsSimulate(uint32_t rpm, SimPhase phase) {
+  uint32_t tps = 8;
+  if (phase == SIM_CRANK) {
+    tps = 0;
+  } else if (rpm > kIdleRpm) {
+    tps = 8 + ((rpm - kIdleRpm) * 70UL) / (kRevRpm - kIdleRpm);
+    if (tps > 100) {
+      tps = 100;
+    }
+  }
+  sensors.tpsPct = (uint8_t)tps;
+  sensors.mapKpa = (uint16_t)(32 + (sensors.tpsPct * 66) / 100);
+
+  const unsigned long warm = millis() - engineStartMs;
+  if (warm >= 90000) {
+    sensors.cltC = 88;
+  } else {
+    sensors.cltC = (int16_t)(18 + (70UL * warm) / 90000UL);
+  }
+  sensors.iatC = (int16_t)(24 + sensors.tpsPct / 20);
+
+  if (phase == SIM_CRANK) {
+    sensors.lambdaX100 = 120;
+  } else if (phase == SIM_REV_UP) {
+    sensors.lambdaX100 = 85;
+  } else if (phase == SIM_REV_DOWN) {
+    sensors.lambdaX100 = 108;
+  } else {
+    sensors.lambdaX100 = 100;
+  }
+}
 
 static const char *phaseName(SimPhase phase) {
   switch (phase) {
@@ -195,7 +238,7 @@ void displayBegin() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 12);
-  tft.print("ECU  CKP sim  #134");
+  tft.print("ECU  sensores  #135");
   tft.setCursor(12, 44);
   tft.printf("roda  36-1   GPIO %d", kPulsePin);
   Serial.println("[display] init ok");
@@ -272,6 +315,7 @@ void simTick() {
   if (rpm != commandedRpm) {
     simApplyRpm(rpm);
   }
+  sensorsSimulate(commandedRpm, simPhase);
 }
 
 void displayTick() {
@@ -285,12 +329,10 @@ void displayTick() {
   }
   lastUiMs = now;
 
-  uint32_t counted;
   uint32_t revolutionUs;
   uint8_t isSynced;
   uint8_t tooth;
   noInterrupts();
-  counted = pulseCount;
   revolutionUs = revUs;
   isSynced = synced;
   tooth = toothIndex;
@@ -304,33 +346,35 @@ void displayTick() {
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
-  tft.fillRect(12, 76, 450, 28, TFT_BLACK);
-  tft.setCursor(12, 76);
-  tft.printf("modo  %s", phaseName(simPhase));
-
-  tft.setTextSize(3);
-  tft.fillRect(12, 112, 360, 40, TFT_BLACK);
-  tft.setCursor(12, 112);
-  tft.printf("RPM  %u", measuredRpm);
+  tft.fillRect(12, 72, 460, 236, TFT_BLACK);
+  tft.setCursor(12, 72);
+  tft.printf("RPM %u  %s  sync %s", measuredRpm, phaseName(simPhase),
+             isSynced ? "SIM" : "NAO");
 
   const int barW = tft.width() - 24;
   const int filled = (int)((measuredRpm * (uint32_t)barW) / 4000UL);
-  tft.fillRect(12, 156, barW, 18, TFT_DARKGREY);
+  tft.fillRect(12, 104, barW, 14, TFT_DARKGREY);
   if (filled > 0) {
-    tft.fillRect(12, 156, filled > barW ? barW : filled, 18, TFT_YELLOW);
+    tft.fillRect(12, 104, filled > barW ? barW : filled, 14, TFT_YELLOW);
   }
 
-  tft.setTextSize(2);
-  tft.fillRect(12, 184, 450, 72, TFT_BLACK);
-  tft.setCursor(12, 184);
-  tft.printf("alvo %u   sync %s", commandedRpm, isSynced ? "SIM" : "NAO");
-  tft.setCursor(12, 216);
-  tft.printf("dente %u   pulsos %u", tooth, counted);
+  tft.setCursor(12, 132);
+  tft.printf("MAP  %u kPa     TPS  %u %%", sensors.mapKpa, sensors.tpsPct);
+  tft.setCursor(12, 168);
+  tft.printf("CLT  %d C       IAT  %d C", sensors.cltC, sensors.iatC);
+  tft.setCursor(12, 204);
+  tft.printf("LAM  %u.%02u      alvo %u", sensors.lambdaX100 / 100,
+             sensors.lambdaX100 % 100, commandedRpm);
+  tft.setCursor(12, 240);
+  tft.printf("dente %u", tooth);
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf("[ckp] modo=%s  alvo=%u  medido=%u  sync=%u\n",
-                  phaseName(simPhase), commandedRpm, measuredRpm, isSynced);
+    Serial.printf(
+        "[sns] %s RPM=%u MAP=%u TPS=%u CLT=%d IAT=%d LAM=%u.%02u sync=%u\n",
+        phaseName(simPhase), measuredRpm, sensors.mapKpa, sensors.tpsPct,
+        sensors.cltC, sensors.iatC, sensors.lambdaX100 / 100,
+        sensors.lambdaX100 % 100, isSynced);
   }
 }
 
@@ -338,7 +382,8 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #134 CKP perfil de motor");
+  Serial.println("programmable-ecu #135 sensores simulados");
+  engineStartMs = millis();
   displayBegin();
   ckpBeginSimulated();
 }
