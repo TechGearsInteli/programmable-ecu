@@ -1,8 +1,9 @@
 /*
-  Programmable ECU — mapa na flash NVS (#141)
+  Programmable ECU — testes automáticos no boot por tecla (!) (#142)
 
   Boot: carrega mapa com checksum; se falhar, usa o padrao.
   Serial: T = altera cel 0,0 | S = grava | D = restaura padrao.
+          ! = roda self-tests e trava no relatorio.
   Reset depois de S deve manter o valor. Nao grava na ISR.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
@@ -198,7 +199,10 @@ static void mapPollSerial() {
     return;
   }
   const char c = (char)Serial.read();
-  if (c == 'T' || c == 't') {
+  if (c == '!') {
+    runSelfTests();
+    while (true) { delay(100); }
+  } else if (c == 'T' || c == 't') {
     fuelMap[0][0] = (uint16_t)(fuelMap[0][0] + 50);
     Serial.printf("[nvs] teste cel00=%u  (envie S e reset)\n", fuelMap[0][0]);
   } else if (c == 'S' || c == 's') {
@@ -691,13 +695,127 @@ void displayTick() {
   }
 }
 
+// ---------- self-tests (#142) ----------
+// Roda no boot se '!' for pressionado nos primeiros 1,5 s, ou a qualquer
+// momento no loop. Apos os testes o firmware trava no relatorio.
+#define TEST_ASSERT(cond, name) do { \
+  total++; \
+  if (cond) { pass++; Serial.printf("[test] PASS %s\n", name); } \
+  else { fail++; Serial.printf("[test] FAIL %s  (%s:%d)\n", name, __FILE__, __LINE__); } \
+} while (0)
+
+static void runSelfTests() {
+  uint16_t pass = 0, fail = 0, total = 0;
+  Serial.println("\n[test] === SELF-TEST START ===");
+
+  // Backup do estado para nao contaminar a simulacao depois.
+  EngineSensors sensorsBackup = sensors;
+  uint32_t measuredRpmBackup = measuredRpm;
+  uint16_t corrLamBackup = corrLamX1000;
+  uint16_t fuelMapBackup[8][8];
+  memcpy(fuelMapBackup, fuelMap, sizeof(fuelMapBackup));
+
+  // 1. Interpolacao bilinear no mapa de combustivel.
+  mapLoadDefault();
+  TEST_ASSERT(lookupFuelPwX100(800, 30) == fuelMap[0][0],
+              "mapa canto inferior rpm/map");
+  TEST_ASSERT(lookupFuelPwX100(4000, 100) == fuelMap[7][7],
+              "mapa canto superior rpm/map");
+  TEST_ASSERT(lookupFuelPwX100(1200, 40) == fuelMap[1][1],
+              "mapa ponto de grade exato");
+  const uint16_t pInterp = lookupFuelPwX100(1000, 35);
+  TEST_ASSERT(pInterp >= fuelMap[0][0] && pInterp <= fuelMap[1][1],
+              "mapa interpolado dentro da caixa");
+
+  // 2. Correcoes de combustivel.
+  sensors.cltC = 10;
+  sensors.iatC = 90;
+  sensors.tpsPct = 10;
+  lastTpsPct = 10;
+  corrAccelX1000 = 1000;
+  corrCutX1000 = 1000;
+  corrLamX1000 = 1000;
+  const uint16_t pwBase = 1000;
+
+  const uint16_t pwCold = applyFuelCorrections(pwBase, SIM_IDLE);
+  const uint16_t expectedCold =
+      (uint16_t)(((uint32_t)pwBase * 1400UL * 970UL) / 1000000UL);
+  TEST_ASSERT(pwCold == expectedCold, "correcao CLT frio + IAT quente");
+
+  sensors.cltC = 90;
+  sensors.iatC = 10;
+  const uint16_t pwWarm = applyFuelCorrections(pwBase, SIM_IDLE);
+  const uint16_t expectedWarm =
+      (uint16_t)(((uint32_t)pwBase * 1000UL * 1020UL) / 1000000UL);
+  TEST_ASSERT(pwWarm == expectedWarm, "correcao CLT quente + IAT frio");
+
+  sensors.tpsPct = 20;
+  const uint16_t pwAccel = applyFuelCorrections(pwBase, SIM_IDLE);
+  TEST_ASSERT(corrAccelX1000 == 1180, "deteccao de aceleracao");
+  TEST_ASSERT(pwAccel > expectedWarm, "enriquecimento de aceleracao");
+
+  const uint16_t pwCut = applyFuelCorrections(pwBase, SIM_REV_DOWN);
+  TEST_ASSERT(pwCut < expectedWarm, "corte na desaceleracao");
+
+  // 3. Protecoes do motor.
+  measuredRpm = 3000;
+  sensors.cltC = 80;
+  TEST_ASSERT(applyProtections(1000) == 0, "protecao RPM limite");
+  measuredRpm = 1000;
+  sensors.cltC = 105;
+  TEST_ASSERT(applyProtections(1000) == 0, "protecao CLT limite");
+  sensors.cltC = 80;
+  TEST_ASSERT(applyProtections(1234) == 1234, "protecao normal");
+
+  // 4. Checksum do mapa.
+  mapLoadDefault();
+  const uint16_t crc1 = mapChecksum(fuelMap);
+  TEST_ASSERT(crc1 == mapChecksum(fuelMap), "checksum estavel");
+  fuelMap[0][0] += 1;
+  const uint16_t crc2 = mapChecksum(fuelMap);
+  TEST_ASSERT(crc1 != crc2, "checksum muda com dado");
+  fuelMap[0][0] -= 1;
+
+  // 5. NVS round-trip.
+  mapLoadDefault();
+  const uint16_t originalCel00 = fuelMap[0][0];
+  fuelMap[0][0] = (uint16_t)(originalCel00 + 50);
+  const uint16_t testCel00 = fuelMap[0][0];
+  mapSaveNvs();
+  mapLoadDefault();
+  TEST_ASSERT(fuelMap[0][0] != testCel00, "RAM apaga mapa antes do load");
+  mapLoadNvs();
+  TEST_ASSERT(fuelMap[0][0] == testCel00, "NVS load volta cel00 alterado");
+  fuelMap[0][0] = originalCel00;
+  mapSaveNvs();
+
+  // Restaura estado.
+  sensors = sensorsBackup;
+  measuredRpm = measuredRpmBackup;
+  corrLamX1000 = corrLamBackup;
+  memcpy(fuelMap, fuelMapBackup, sizeof(fuelMap));
+
+  Serial.printf("[test] === RESULTADO: %u/%u PASS (falhas %u) ===\n",
+                pass, total, fail);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #141 NVS  (T teste, S grava, D padrao)");
+  Serial.println("programmable-ecu #142 self-test (!) | NVS T/S/D");
   engineStartMs = millis();
   mapLoadNvs();
+
+  // Opcao de self-test no boot: mantem a porta aberta e aperta '!' ao resetar.
+  const unsigned long testWaitStart = millis();
+  while (millis() - testWaitStart < 1500) {
+    if (Serial.available() && Serial.read() == '!') {
+      runSelfTests();
+      while (true) { delay(100); }
+    }
+  }
+
   displayBegin();
   ckpBeginSimulated();
 }
