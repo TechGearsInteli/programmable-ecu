@@ -1,22 +1,22 @@
 /*
-  Programmable ECU — smoke test da TFT 3.5" 8-bit paralelo (#131)
+  Programmable ECU — timer LEDC, pulso 1.00 ms (#133)
 
-  Arduino IDE 1.8:
-  1. Biblioteca: Sketch > Incluir Biblioteca > Gerenciar Bibliotecas
-     instale "LovyanGFX" (lovyan03)
-  2. Placa: ESP32 Dev Module
-  3. Porta: COM do CP2102 (nao use COM Bluetooth)
-  4. Serial Monitor 115200
+  A TFT mostra o valor programado, um contador de bordas no GPIO 4
+  e um quadrado lento (olho humano). Sem LED externo.
+  O pulso de 1 ms sai no GPIO 4 mesmo sem nada conectado.
 
-  Se o upload falhar com a tela ligada, D0 esta no GPIO12 (pino de boot):
-  segura BOOT, clica Upload, solta BOOT quando começar a gravar.
-
-  Se a tela ficar branca/lixo, no Serial avise: tentamos ILI9486;
-  o shield 3.5 às vezes e ILI9488 — a gente troca o painel.
+  Arduino IDE 1.8: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
+  Upload com TFT: se falhar, segura BOOT (D0 = GPIO12).
 */
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
+
+static const int kPulsePin = 4;
+static const uint32_t kPwmHz = 500;
+static const uint8_t kPwmBits = 8;
+static const uint32_t kPwmDuty = 128;
+static const float kPulseMs = 1.00f;
 
 class EcuDisplay : public lgfx::LGFX_Device {
   lgfx::Panel_ILI9486 _panel;
@@ -65,50 +65,94 @@ public:
 };
 
 static EcuDisplay tft;
-static unsigned long lastHeartbeatMs = 0;
+static volatile uint32_t pulseCount = 0;
+static unsigned long lastUiMs = 0;
+static unsigned long lastSerialMs = 0;
+static uint32_t lastShownCount = 0;
+static bool lastBlinkOn = false;
+static bool tftReady = false;
+
+void IRAM_ATTR onPulseRise() {
+  pulseCount++;
+}
 
 void displayBegin() {
-  Serial.println("[display] pinout D0=12 D1=13 D2=26 D3=25 D4=17 D5=16 D6=19 D7=18");
-  Serial.println("[display] RST=32 CS=27 RS=23 WR=21 RD=22");
-  Serial.println("[display] aviso: shield em 5V; ESP32 e 3.3V — se esquentar/resetar, pare");
-
   if (!tft.init()) {
-    Serial.println("[display] init falhou (cheque fios e LovyanGFX)");
+    Serial.println("[display] init falhou");
     return;
   }
 
+  tftReady = true;
   tft.setRotation(1);
-  tft.setBrightness(255);
   tft.fillScreen(TFT_BLACK);
-  tft.fillRect(0, 0, tft.width() / 3, tft.height(), TFT_RED);
-  tft.fillRect(tft.width() / 3, 0, tft.width() / 3, tft.height(), TFT_GREEN);
-  tft.fillRect((tft.width() / 3) * 2, 0, tft.width() / 3, tft.height(), TFT_BLUE);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
-  tft.setCursor(12, tft.height() / 2 - 8);
-  tft.print("programmable-ecu");
+  tft.setCursor(12, 16);
+  tft.print("ECU  timer LEDC  #133");
+  tft.setCursor(12, 56);
+  tft.printf("pulso  %.2f ms", kPulseMs);
+  tft.setCursor(12, 88);
+  tft.printf("GPIO %d  %u Hz  50%%", kPulsePin, kPwmHz);
+  tft.setCursor(12, 128);
+  tft.print("pulsos  0");
+  tft.drawRect(tft.width() - 80, 20, 56, 56, TFT_WHITE);
 
-  Serial.print("[display] init ok  ");
-  Serial.print(tft.width());
-  Serial.print("x");
-  Serial.println(tft.height());
+  Serial.println("[display] init ok");
+}
+
+void timerBeginPulse() {
+  if (!ledcAttach(kPulsePin, kPwmHz, kPwmBits)) {
+    Serial.println("[timer] ledcAttach falhou");
+    return;
+  }
+  ledcWrite(kPulsePin, kPwmDuty);
+  attachInterrupt(kPulsePin, onPulseRise, RISING);
+  Serial.println("[timer] LEDC 1.00 ms no GPIO 4 (sem LED, so o pino)");
 }
 
 void displayTick() {
-  const unsigned long now = millis();
-  if (now - lastHeartbeatMs < 2000) {
+  if (!tftReady) {
     return;
   }
-  lastHeartbeatMs = now;
-  Serial.println("[display] tft viva");
+
+  const unsigned long now = millis();
+  if (now - lastUiMs < 200) {
+    return;
+  }
+  lastUiMs = now;
+
+  uint32_t count;
+  noInterrupts();
+  count = pulseCount;
+  interrupts();
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.fillRect(12, 128, 280, 28, TFT_BLACK);
+  tft.setCursor(12, 128);
+  tft.printf("pulsos  %u", count);
+
+  const bool blinkOn = ((count / 250) & 1) != 0;
+  if (blinkOn != lastBlinkOn || count != lastShownCount) {
+    lastBlinkOn = blinkOn;
+    tft.fillRect(tft.width() - 76, 24, 48, 48, blinkOn ? TFT_YELLOW : TFT_BLACK);
+    tft.drawRect(tft.width() - 80, 20, 56, 56, TFT_WHITE);
+  }
+  lastShownCount = count;
+
+  if (now - lastSerialMs >= 2000) {
+    lastSerialMs = now;
+    Serial.printf("[timer] pulso=%.2f ms  GPIO=%d  pulsos=%u\n", kPulseMs, kPulsePin, count);
+  }
 }
 
 void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu firmware skeleton");
+  Serial.println("programmable-ecu #133 timers");
   displayBegin();
+  timerBeginPulse();
 }
 
 void loop() {
