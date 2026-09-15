@@ -20,6 +20,7 @@
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
+#include <stdarg.h>
 
 #ifndef PI
 #define PI 3.14159265f
@@ -149,7 +150,7 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
 }
 
 static void drawGaugeRPM(int cx, int cy, int r) {
-  // Fundo cinza do arco
+  // Fundo cinza do arco (sobrescreve frame anterior)
   drawArc(cx, cy, r, 18, 135.0f, 405.0f, TFT_DARKGREY);
   // Parte preenchida
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
@@ -157,7 +158,7 @@ static void drawGaugeRPM(int cx, int cy, int r) {
   const uint16_t color = colorForRpm(rpm);
   drawArc(cx, cy, r, 18, 135.0f, endAngle, color);
 
-  // Texto central
+  // Texto central — background preto apaga o numero antigo
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setTextDatum(middle_center);
@@ -168,16 +169,30 @@ static void drawGaugeRPM(int cx, int cy, int r) {
   tft.setTextDatum(top_left);
 }
 
-static void drawBar(const char *label, int x, int y, int w, int h,
-                    int value, int minV, int maxV, uint16_t color) {
+static void drawBarStatic(const char *label, int x, int y, int w, int h) {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(x, y - 18);
   tft.print(label);
-  tft.fillRect(x, y, w, h, TFT_DARKGREY);
-  const int filled = clamp((value - minV) * w / (maxV - minV), 0, w);
-  tft.fillRect(x, y, filled, h, color);
   tft.drawRect(x, y, w, h, TFT_WHITE);
+}
+
+static void drawBarValue(int x, int y, int w, int h,
+                         int value, int minV, int maxV, uint16_t color,
+                         int valX, const char *fmt, ...) {
+  // Limpa preenchimento anterior
+  tft.fillRect(x + 1, y + 1, w - 2, h - 2, TFT_DARKGREY);
+  const int filled = clamp((value - minV) * (w - 2) / (maxV - minV), 0, w - 2);
+  tft.fillRect(x + 1, y + 1, filled, h - 2, color);
+
+  // Valor numerico ao lado com background preto
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(1);
+  tft.setCursor(valX, y + 4);
+  va_list args;
+  va_start(args, fmt);
+  tft.vprintf(fmt, args);
+  va_end(args);
 }
 
 static void drawStatusBox(int x, int y, const char *label, bool active, uint16_t activeColor) {
@@ -203,7 +218,8 @@ static void drawButtonHint(int x, int y, const char *key, const char *txt) {
   tft.print(txt);
 }
 
-static void drawScreen() {
+// Desenha tudo que nao muda (fundos, labels, contornos). Chamado no setup.
+static void drawStatic() {
   tft.fillScreen(TFT_BLACK);
 
   // Cabecalho
@@ -213,26 +229,44 @@ static void drawScreen() {
   tft.print("Programmable ECU  DEMO");
   tft.drawLine(12, 34, tft.width() - 12, 34, TFT_WHITE);
 
+  // Labels e contornos das barras
+  drawBarStatic("TPS %", 12, 200, 140, 18);
+  drawBarStatic("MAP kPa", 168, 200, 140, 18);
+  drawBarStatic("CLT C", 12, 250, 140, 18);
+  drawBarStatic("IAT C", 168, 250, 140, 18);
+  drawBarStatic("LAMBDA", 12, 300, 140, 18);
+  drawBarStatic("FUEL ms", 168, 300, 140, 18);
+
+  // Label do indicador de injecao
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(12, 388);
+  tft.print("Injecao:");
+
+  // Contorno do indicador de injecao
+  const int fuelW = tft.width() - 100;
+  tft.drawRect(96, 388, fuelW, 20, TFT_WHITE);
+
+  // Legendas de botoes
+  drawButtonHint(12, 446, "P", "Ligar");
+  drawButtonHint(90, 446, "A", "Acelerar");
+  drawButtonHint(180, 446, "C", "Frio");
+  drawButtonHint(252, 446, "H", "Hot");
+  drawButtonHint(334, 446, "L", "Lim");
+}
+
+// Desenha apenas elementos que mudam a cada frame. Chamado no loop.
+static void drawDynamic() {
   // Gauge RPM no centro superior
   drawGaugeRPM(tft.width() / 2, 115, 82);
 
-  // Barras de sensores
-  drawBar("TPS %", 12, 200, 140, 18, tps, 0, 100, TFT_GREEN);
-  drawBar("MAP kPa", 168, 200, 140, 18, mapKpa, 30, 100, TFT_YELLOW);
-  drawBar("CLT C", 12, 250, 140, 18, cltC, 0, 120, colorForClt(cltC));
-  drawBar("IAT C", 168, 250, 140, 18, iatC, 0, 60, TFT_ORANGE);
-  drawBar("LAMBDA", 12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN);
-  drawBar("FUEL ms", 168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE);
-
-  // Valores numericos ao lado das barras
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(1);
-  tft.setCursor(12 + 142, 200 + 4); tft.printf("%u%%", tps);
-  tft.setCursor(168 + 142, 200 + 4); tft.printf("%u", mapKpa);
-  tft.setCursor(12 + 142, 250 + 4); tft.printf("%d", cltC);
-  tft.setCursor(168 + 142, 250 + 4); tft.printf("%d", iatC);
-  tft.setCursor(12 + 142, 300 + 4); tft.printf("%u.%02u", lambdaX100 / 100, lambdaX100 % 100);
-  tft.setCursor(168 + 142, 300 + 4); tft.printf("%u.%02u", fuelPwX100 / 100, fuelPwX100 % 100);
+  // Barras de sensores (valores)
+  drawBarValue(12, 200, 140, 18, tps, 0, 100, TFT_GREEN, 12 + 142, "%u%%");
+  drawBarValue(168, 200, 140, 18, mapKpa, 30, 100, TFT_YELLOW, 168 + 142, "%u");
+  drawBarValue(12, 250, 140, 18, cltC, 0, 120, colorForClt(cltC), 12 + 142, "%d");
+  drawBarValue(168, 250, 140, 18, iatC, 0, 60, TFT_ORANGE, 168 + 142, "%d");
+  drawBarValue(12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN, 12 + 142, "%u.%02u", lambdaX100 / 100, lambdaX100 % 100);
+  drawBarValue(168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE, 168 + 142, "%u.%02u", fuelPwX100 / 100, fuelPwX100 % 100);
 
   // Caixas de status
   drawStatusBox(12, 340, "POWER", engineOn, engineOn ? TFT_GREEN : TFT_RED);
@@ -240,18 +274,14 @@ static void drawScreen() {
   drawStatusBox(216, 340, "HOT", hotMode, TFT_RED);
   drawStatusBox(318 - 90, 340, "LIMIT", limiterOn && engineOn, TFT_ORANGE);
 
-  // Indicador de combustivel (representacao visual da quantidade injetada)
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(2);
-  tft.setCursor(12, 388);
-  tft.print("Injecao:");
+  // Preenchimento do indicador de injecao
   const int fuelW = tft.width() - 100;
-  const int fuelFill = clamp((int)fuelPwX100 * fuelW / 2500, 0, fuelW);
-  tft.fillRect(96, 388, fuelW, 20, TFT_DARKGREY);
-  tft.fillRect(96, 388, fuelFill, 20, fuelPwX100 > 0 ? TFT_BLUE : TFT_DARKGREY);
-  tft.drawRect(96, 388, fuelW, 20, TFT_WHITE);
+  const int fuelFill = clamp((int)fuelPwX100 * (fuelW - 2) / 2500, 0, fuelW - 2);
+  tft.fillRect(96 + 1, 388 + 1, fuelW - 2, 20 - 2, TFT_DARKGREY);
+  tft.fillRect(96 + 1, 388 + 1, fuelFill, 20 - 2, fuelPwX100 > 0 ? TFT_BLUE : TFT_DARKGREY);
 
-  // Aviso de protecao
+  // Aviso de protecao — limpa a linha antes
+  tft.fillRect(12, 420, 300, 22, TFT_BLACK);
   if (engineOn && ((limiterOn && rpm >= kRpmLimit) || cltC >= kCltLimitC)) {
     tft.setTextColor(TFT_RED, TFT_BLACK);
     tft.setTextSize(2);
@@ -266,13 +296,6 @@ static void drawScreen() {
     tft.setCursor(12, 420);
     tft.print("Sistema normal");
   }
-
-  // Legendas de botoes
-  drawButtonHint(12, 446, "P", "Ligar");
-  drawButtonHint(90, 446, "A", "Acelerar");
-  drawButtonHint(180, 446, "C", "Frio");
-  drawButtonHint(252, 446, "H", "Hot");
-  drawButtonHint(334, 446, "L", "Lim");
 }
 
 // ---------- Processamento do motor (foco principal) ----------
@@ -415,6 +438,9 @@ void setup() {
   tft.setCursor(12, tft.height() / 2 + 8);
   tft.print("Demo visual");
 
+  delay(1200);
+  drawStatic(); // desenha elementos estaticos uma unica vez
+
   Serial.println("[demo] botoes: P=power A=accel C=cold H=hot L=limit");
   if (!tft.touch()) {
     Serial.println("[demo] touch nao configurado; usando botoes fisicos");
@@ -431,7 +457,7 @@ void loop() {
 
   if (now - lastDrawMs >= 100) {
     lastDrawMs = now;
-    drawScreen();
+    drawDynamic();
   }
 
   if (now - lastSerialMs >= 1000) {
