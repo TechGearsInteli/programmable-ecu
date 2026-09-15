@@ -1,8 +1,8 @@
 /*
-  Programmable ECU — 4 injetores sequenciais 1-3-4-2 (#138)
+  Programmable ECU — lambda em malha fechada (#139)
 
-  Pulsos = PWf, nos GPIO 2,14,15,33. CKP continua no GPIO 4.
-  Nao ligar bico real. TFT lenta; quadrados so indicam quem disparou.
+  xLAM sobe se a sonda simula pobre, desce se rica. So na lenta e motor
+  morno. ISR/CKP intactos. TFT lenta.
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
 */
@@ -116,6 +116,8 @@ static uint16_t corrCltX1000 = 1000;
 static uint16_t corrIatX1000 = 1000;
 static uint16_t corrAccelX1000 = 1000;
 static uint16_t corrCutX1000 = 1000;
+static uint16_t corrLamX1000 = 1000;
+static unsigned long lastLamMs = 0;
 static uint8_t lastTpsPct = 0;
 static uint8_t mapRpmCell = 0;
 static uint8_t mapLoadCell = 0;
@@ -231,10 +233,29 @@ static uint16_t applyFuelCorrections(uint16_t pwMapX100, SimPhase phase) {
   v = (v * corrIatX1000) / 1000;
   v = (v * corrAccelX1000) / 1000;
   v = (v * corrCutX1000) / 1000;
+  v = (v * corrLamX1000) / 1000;
   if (v > 65535) {
     v = 65535;
   }
   return (uint16_t)v;
+}
+
+static void updateLambdaClosedLoop(SimPhase phase) {
+  const unsigned long now = millis();
+  if (now - lastLamMs < 80) {
+    return;
+  }
+  lastLamMs = now;
+
+  if (phase != SIM_IDLE || sensors.cltC < 40) {
+    return;
+  }
+
+  if (sensors.lambdaX100 > 102 && corrLamX1000 < 1150) {
+    corrLamX1000++;
+  } else if (sensors.lambdaX100 < 98 && corrLamX1000 > 850) {
+    corrLamX1000--;
+  }
 }
 
 static void updateMeasuredRpm() {
@@ -276,7 +297,7 @@ static void sensorsSimulate(uint32_t rpm, SimPhase phase) {
   } else if (phase == SIM_REV_DOWN) {
     sensors.lambdaX100 = 108;
   } else {
-    sensors.lambdaX100 = 100;
+    sensors.lambdaX100 = 104;
   }
 }
 
@@ -418,7 +439,7 @@ void displayBegin() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 12);
-  tft.print("ECU  INJ 1-3-4-2  #138");
+  tft.print("ECU  lambda CL  #139");
   tft.setCursor(12, 44);
   tft.printf("roda  36-1   GPIO %d", kPulsePin);
   Serial.println("[display] init ok");
@@ -507,6 +528,7 @@ void simTick() {
     simApplyRpm(rpm);
   }
   sensorsSimulate(commandedRpm, simPhase);
+  updateLambdaClosedLoop(simPhase);
   updateMeasuredRpm();
   const uint16_t rpmForMap = measuredRpm > 0 ? (uint16_t)measuredRpm : (uint16_t)commandedRpm;
   fuelPwX100 = lookupFuelPwX100(rpmForMap, sensors.mapKpa);
@@ -554,9 +576,12 @@ void displayTick() {
 
   tft.fillRect(12, 128, 460, 100, TFT_BLACK);
   tft.setCursor(12, 128);
-  tft.printf("PWf %u.%02u ms", fuelPwFinalX100 / 100, fuelPwFinalX100 % 100);
+  tft.printf("PWf %u.%02u  LAM %u.%02u", fuelPwFinalX100 / 100,
+             fuelPwFinalX100 % 100, sensors.lambdaX100 / 100,
+             sensors.lambdaX100 % 100);
   tft.setCursor(12, 156);
-  tft.printf("n %u %u %u %u", c0, c1, c2, c3);
+  tft.printf("xLAM %u.%02u  n %u %u %u %u", corrLamX1000 / 1000,
+             (corrLamX1000 % 1000) / 10, c0, c1, c2, c3);
 
   const int box = 52;
   const int yb = 192;
@@ -573,7 +598,8 @@ void displayTick() {
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf("[inj] PWf=%u.%02u  n1=%u n3=%u n4=%u n2=%u\n",
+    Serial.printf("[lam] LAM=%u.%02u xLAM=%u PWf=%u.%02u n=%u/%u/%u/%u\n",
+                  sensors.lambdaX100 / 100, sensors.lambdaX100 % 100, corrLamX1000,
                   fuelPwFinalX100 / 100, fuelPwFinalX100 % 100, c0, c1, c2, c3);
   }
 }
@@ -582,7 +608,7 @@ void setup() {
   Serial.begin(115200);
   delay(300);
   Serial.println();
-  Serial.println("programmable-ecu #138 injetores 1-3-4-2");
+  Serial.println("programmable-ecu #139 lambda malha fechada");
   engineStartMs = millis();
   displayBegin();
   ckpBeginSimulated();
