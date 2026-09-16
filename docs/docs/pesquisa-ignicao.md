@@ -174,6 +174,142 @@ Para adicionar ignição, as próximas tasks devem cobrir:
 - **Tensão da bateria**: sem leitura de bateria, o dwell fica exposto a variações. Adicionar divisor resistivo + ADC para bateria é recomendado antes de rodar no carro.
 - **Trigger real vs simulado**: a roda fônica simulada é perfeita; sensores reais (Hall/VR) têm ruído, variação de duty cycle e necessitam de condicionamento de sinal.
 
+## 9. Melhorias gerais do firmware para torná-lo robusto
+
+Além da ignição, o firmware atual — ainda concentrado no arquivo `ecu.ino` — precisa evoluir em algumas direções antes de ser considerado pronto para operação real. Os projetos open source mostram padrões comuns que são quase obrigatórios em ECU de produção:
+
+### 9.1 Separação em módulos e HAL
+
+Atualmente o firmware mistura lógica de sensores, cálculo de injeção, controle de display e simulação no mesmo arquivo. A arquitetura do projeto já prevê uma **HAL (Hardware Abstraction Layer)** e módulos separados. Refatorar para algo como:
+
+- `hal/gpio.h`, `hal/adc.h`, `hal/timer.h`, `hal/serial.h` — abstraem o ESP32.
+- `sensors.c` — leitura, filtragem e validação de todos os sensores.
+- `fuel.c` — cálculo de PW, correções, closed-loop lambda.
+- `ignition.c` — avanço, dwell, agendamento de faíscas.
+- `engine.c` — orquestração do ciclo do motor.
+- `display.c` — atualização da tela em task separada.
+
+Isso permite substituir a origem dos dados (OBD-II na Fase 1, sensores diretos na Fase 2) sem mexer na lógica de controle.
+
+### 9.2 Leitura real de sensores por ADC
+
+Mesmo na Fase 1 com OBD-II, a HAL de ADC deve existir e ser testada. Na Fase 2, ela substitui os valores simulados. Sensores necessários:
+
+- **MAP:** sensor de pressão absoluta (ex.: MPX4250A, MPX5700).
+- **TPS:** potenciômetro simples com divisor resistivo.
+- **CLT e IAT:** termistores NTC com tabela de conversão.
+- **Lambda:** sonda narrowband (0-1 V) ou wideband (CJ125/LSU 4.9).
+- **Bateria:** divisor resistivo na entrada analógica para correção de PW e dwell.
+
+Cada canal precisa de:
+- Filtro digital (média móvel ou médiana).
+- Faixa de operação esperada.
+- Detecção de falha (curto, aberto, saturação).
+
+### 9.3 Comunicação com o veículo
+
+A Fase 1 usa um **adaptador OBD-II serial** para ler dados da ECU original sem mexer no carro. Isso é seguro e barato, mas a latência e o conjunto de PIDs disponíveis dependem do veículo.
+
+Uma alternativa mais avançada é conectar diretamente à **rede CAN do veículo** com um transceiver MCP2515 ou CAN integrado no ESP32-S3. Muitos veículos modernos transmitem RPM, TPS, temperaturas e códigos de falha no CAN, com taxa de atualização maior que o OBD-II e sem o overhead do protocolo de diagnóstico. A desvantagem é que o mapeamento de IDs e offsets varia por fabricante.
+
+Sugestão: manter OBD-II como primeiro passo (universal) e CAN direto como evolução futura (maior performance, depende do veículo).
+
+### 9.4 Task splitting e prioridade
+
+O ESP32 tem dois núcleos. A estratégia recomendada em projetos como ESP-ECU é:
+
+- **Core 0 (ou core principal):** ciclo de controle do motor — interrupções CKP, cálculo de PW, agendamento de injetores/bobinas. Latência crítica.
+- **Core 1:** tela, Wi-Fi, API, serial de debug, datalogger. Pode atrasar sem afetar o motor.
+
+No Arduino core isso é feito com `xTaskCreatePinnedToCore`. Com FreeRTOS puro (ESP-IDF) o controle é ainda mais fino.
+
+### 9.5 Datalogger estruturado
+
+Hoje o firmware imprime logs no Serial em formato livre. Para calibração e diagnóstico, o ideal é um formato estruturado, como:
+
+```csv
+timestamp_ms,rpm,map_kpa,tps_pct,clt_c,iat_c,lambda_x100,pw_x100,phase,sync,inj_count
+```
+
+Isso permite abrir em planilha e identificar comportamentos transitórios (picos de temperatura, oscilação de lambda, etc.).
+
+### 9.6 Watchdog e recovery
+
+Um **watchdog de hardware** reinicia o ESP32 se o loop principal travar. Após o reinício, o firmware deve:
+
+- Carregar o mapa salvo na NVS.
+- Entrar em modo seguro (mapa conservador) se detectar falha de sensor crítico.
+- Registrar a falha em contador persistente para diagnóstico.
+
+Isso está na Feature 1.8, mas deve ser considerado no design do núcleo desde agora.
+
+### 9.7 Calibração e persistência de parâmetros
+
+Além do mapa de combustível, outros parâmetros devem ser salvos na NVS:
+
+- Trigger angle offset.
+- Constantes de sensores (tabelas NTC, offset MAP, etc.).
+- Limites de proteção (RPM limit, CLT limit).
+- Fator de correção de lambda de longo prazo.
+
+A API de configuração (Feature 1.6) deve poder ler e escrever cada um desses valores.
+
+## 10. Conexão com o veículo: OBD-II vs CAN direto
+
+| Aspecto | OBD-II (serial) | CAN direto |
+|---|---|---|
+| Hardware | Adaptador ELM327-style ou custom | Transceiver MCP2515 / CAN interno do ESP32-S3 |
+| Complexidade | Baixa | Média/alta (varia por veículo) |
+| Latência | 50-200 ms por PID | 10-100 ms, depende da taxa de mensagens |
+| Conjunto de dados | PIDs padronizados (RPM, TPS, CLT, MAP, lambda) | IDs específicos do fabricante |
+| Segurança | Apenas leitura, sem risco ao carro | Apenas leitura, mas exige saber os IDs corretos |
+| Custo | Adaptador comercial barato | Transceiver + resistor de terminação |
+| Recomendação | Primeiro passo universal | Evolução para melhor performance |
+
+Para a Fase 1, o OBD-II é o caminho mais curto para validar o firmware com um motor real. O CAN direto pode ser estudado em paralelo para veículos onde os dados críticos são publicados na rede.
+
+## 11. Sugestão de estrutura de issues para o aprofundamento
+
+Para manter o padrão atual do projeto (histórias, features e sub-tasks numeradas), sugere-se criar uma nova história ou feature de aprofundamento do firmware. Abaixo está um exemplo de estrutura que inclui ignição, melhorias gerais e conexão com o veículo:
+
+### História 1.5.2 — Aprofundar o núcleo de controle do motor
+
+| Task | Título | Entregável |
+|---|---|---|
+| 1.5.2.1 | Definir hardware de driver de ignição | Documento de decisão + esquema elétrico |
+| 1.5.2.2 | Implementar mapa de avanço de ignição 2D | Código + testes de interpolação |
+| 1.5.2.3 | Implementar tabela de dwell (RPM × bateria) | Código + testes |
+| 1.5.2.4 | Agendar carga/descarga da bobina a partir do CKP | Algoritmo + prova em bancada |
+| 1.5.2.5 | Acionar 1 saída de ignição em modo teste | LED/osciloscópio |
+| 1.5.2.6 | Implementar wasted spark para 4 cilindros | 2 bobinas, ordem 1-3-4-2 |
+| 1.5.2.7 | Calibrar trigger offset com luz estroboscópica | Procedimento documentado |
+| 1.5.2.8 | Implementar proteções de ignição | Over-dwell, falha CKP, corte em over-rev |
+| 1.5.2.9 | Implementar leitura de sensores por ADC real | MAP, TPS, CLT, IAT, bateria, lambda |
+| 1.5.2.10 | Refatorar firmware em módulos (HAL + engine + fuel + ignition + display) | Código organizado |
+| 1.5.2.11 | Implementar driver OBD-II para leitura de dados do veículo | Firmware lê RPM, TPS, CLT, MAP, lambda |
+| 1.5.2.12 | Estudar e documentar leitura CAN direta do veículo | Documento com IDs de exemplo |
+| 1.5.2.13 | Separar tarefas críticas e não críticas entre os cores do ESP32 | Core de controle + core de interface |
+| 1.5.2.14 | Implementar datalogger estruturado no Serial | Saída CSV com timestamp e grandezas |
+
+### História 1.5.3 — Preparar firmware para produção (depende da 1.8)
+
+Esta história pode ser mesclada com a Feature 1.8 (Segurança) ou mantida separada:
+
+| Task | Título | Entregável |
+|---|---|---|
+| 1.5.3.1 | Implementar watchdog de hardware | Reinício automático em travamento |
+| 1.5.3.2 | Implementar detecção de falha de sensores | Flags e limp mode |
+| 1.5.3.3 | Persistir parâmetros de calibração além do mapa de combustível | NVS estendida |
+
+## 12. Considerações sobre a demonstração visual
+
+O sketch `ecu_demo.ino` serve para apresentar o funcionamento do processamento de dados do motor sem risco. Ele pode evoluir para:
+
+- Receber dados reais do OBD-II ou CAN em vez de simulação.
+- Exibir a célula ativa do mapa de combustível.
+- Mostrar o estado da injeção e ignição em tempo real.
+- Ser a base do dashboard offline antes da interface web.
+
 ## 8. Referências
 
 1. Speeduino Doxygen — `scheduler_ignition_controller.cpp/.h`, `scheduler.cpp`, `scheduledIO_ign.cpp`: https://speeduino.github.io/speeduino-doxygen/
