@@ -785,18 +785,19 @@ static void runSelfTests() {
   TEST_ASSERT(crc1 != crc2, "checksum muda com dado");
   fuelMap[0][0] -= 1;
 
-  // 5. NVS round-trip.
-  mapLoadDefault();
+  // 5. NVS round-trip. Usa o mapa atual (que pode ser padrao ou customizado
+  // carregado na inicializacao), salva um valor alterado, recarrega e
+  // restaura o mapa original completo no final para nao perder a calibracao.
   const uint16_t originalCel00 = fuelMap[0][0];
   fuelMap[0][0] = (uint16_t)(originalCel00 + 50);
   const uint16_t testCel00 = fuelMap[0][0];
-  mapSaveNvs();
+  TEST_ASSERT(mapSaveNvs(), "NVS save ok");
   mapLoadDefault();
   TEST_ASSERT(fuelMap[0][0] != testCel00, "RAM apaga mapa antes do load");
   mapLoadNvs();
   TEST_ASSERT(fuelMap[0][0] == testCel00, "NVS load volta cel00 alterado");
-  fuelMap[0][0] = originalCel00;
-  mapSaveNvs();
+  memcpy(fuelMap, fuelMapBackup, sizeof(fuelMap));
+  TEST_ASSERT(mapSaveNvs(), "NVS restore original map");
 
   // Restaura estado.
   sensors = sensorsBackup;
