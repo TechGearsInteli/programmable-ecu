@@ -150,22 +150,23 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
 }
 
 static void drawGaugeRPM(int cx, int cy, int r) {
+  const int thick = 12;
   // Fundo cinza do arco (sobrescreve frame anterior)
-  drawArc(cx, cy, r, 18, 135.0f, 405.0f, TFT_DARKGREY);
+  drawArc(cx, cy, r, thick, 135.0f, 405.0f, TFT_DARKGREY);
   // Parte preenchida
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
   const float endAngle = 135.0f + frac * 270.0f;
   const uint16_t color = colorForRpm(rpm);
-  drawArc(cx, cy, r, 18, 135.0f, endAngle, color);
+  drawArc(cx, cy, r, thick, 135.0f, endAngle, color);
 
   // Texto central — background preto apaga o numero antigo
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(2);
+  tft.setTextSize(1);
   tft.setTextDatum(middle_center);
-  tft.drawString("RPM", cx, cy - 28);
-  tft.setTextSize(4);
+  tft.drawString("RPM", cx, cy - 18);
+  tft.setTextSize(3);
   tft.setTextColor(color, TFT_BLACK);
-  tft.drawNumber(rpm, cx, cy + 12);
+  tft.drawNumber(rpm, cx, cy + 8);
   tft.setTextDatum(top_left);
 }
 
@@ -257,8 +258,8 @@ static void drawStatic() {
 
 // Desenha apenas elementos que mudam a cada frame. Chamado no loop.
 static void drawDynamic() {
-  // Gauge RPM no centro superior
-  drawGaugeRPM(tft.width() / 2, 115, 82);
+  // Gauge RPM no centro superior (raio menor para nao cobrir as barras)
+  drawGaugeRPM(tft.width() / 2, 100, 56);
 
   // Barras de sensores (valores)
   drawBarValue(12, 200, 140, 18, tps, 0, 100, TFT_GREEN, 12 + 142, "%u%%");
