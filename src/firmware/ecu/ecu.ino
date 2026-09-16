@@ -340,7 +340,15 @@ static void updateLambdaClosedLoop(SimPhase phase) {
   }
   lastLamMs = now;
 
-  if (phase != SIM_IDLE || sensors.cltC < 40) {
+  // Closed-loop lambda so atua no marcha-lenta quente com borboleta fechada.
+  const bool active = (phase == SIM_IDLE && sensors.cltC >= 40 && sensors.tpsPct <= 8);
+  if (!active) {
+    // Volta suavemente a correcao para neutro quando sai da malha fechada.
+    if (corrLamX1000 > 1000) {
+      corrLamX1000--;
+    } else if (corrLamX1000 < 1000) {
+      corrLamX1000++;
+    }
     return;
   }
 
