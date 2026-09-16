@@ -352,10 +352,21 @@ static void updateLambdaClosedLoop(SimPhase phase) {
 }
 
 static void updateMeasuredRpm() {
+  const uint32_t now = micros();
   uint32_t revolutionUs;
+  uint32_t lastRise;
   noInterrupts();
   revolutionUs = revUs;
+  lastRise = lastRiseUs;
   interrupts();
+
+  // Se nao houver pulso CKP por 500 ms, considera motor parado.
+  if ((now - lastRise) > 500000UL) {
+    lastGoodRpm = 0;
+    measuredRpm = 0;
+    return;
+  }
+
   if (revolutionUs >= 10000 && revolutionUs <= 300000) {
     lastGoodRpm = 60000000UL / revolutionUs;
   }
