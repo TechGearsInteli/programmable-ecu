@@ -166,15 +166,24 @@ static void mapLoadDefault() {
   mapFromNvs = 0;
 }
 
-static void mapSaveNvs() {
+static bool mapSaveNvs() {
   const uint16_t crc = mapChecksum(fuelMap);
-  ecuPrefs.begin("ecu", false);
-  ecuPrefs.putUShort("magic", 0xEC01);
-  ecuPrefs.putUShort("crc", crc);
-  ecuPrefs.putBytes("map", fuelMap, sizeof(fuelMap));
+  if (!ecuPrefs.begin("ecu", false)) {
+    Serial.println("[nvs] begin falhou");
+    return false;
+  }
+  bool ok = true;
+  if (ecuPrefs.putUShort("magic", 0xEC01) != 0xEC01) ok = false;
+  if (ecuPrefs.putUShort("crc", crc) != crc) ok = false;
+  if (ecuPrefs.putBytes("map", fuelMap, sizeof(fuelMap)) != sizeof(fuelMap)) ok = false;
   ecuPrefs.end();
+  if (!ok) {
+    Serial.println("[nvs] gravacao incompleta");
+    return false;
+  }
   mapFromNvs = 1;
   Serial.printf("[nvs] gravado crc=%u cel00=%u\n", crc, fuelMap[0][0]);
+  return true;
 }
 
 static void mapLoadNvs() {
