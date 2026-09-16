@@ -653,6 +653,16 @@ void simTick() {
   fuelPwX100 = lookupFuelPwX100(rpmForMap, sensors.mapKpa);
   fuelPwFinalX100 = applyProtections(applyFuelCorrections(fuelPwX100, simPhase));
   injPwUs = (uint32_t)fuelPwFinalX100 * 10UL;
+
+  // Protecao: PW nao pode ocupar quase uma revolucao inteira.
+  const uint32_t maxPwUs = (measuredRpm > 100) ? (48000000UL / measuredRpm) : 30000UL;
+  if (injPwUs > maxPwUs) {
+    injPwUs = maxPwUs;
+  }
+  // PW menor que ~0.4 ms e desprezavel; evita pulso invalido na ISR.
+  if (injPwUs < 400UL) {
+    injPwUs = 0;
+  }
 }
 
 void displayTick() {
