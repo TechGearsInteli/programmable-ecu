@@ -783,6 +783,12 @@ static void runSelfTests() {
   const uint16_t pInterp = lookupFuelPwX100(1000, 35);
   TEST_ASSERT(pInterp >= fuelMap[0][0] && pInterp <= fuelMap[1][1],
               "mapa interpolado dentro da caixa");
+  TEST_ASSERT(pInterp > fuelMap[0][0] && pInterp < fuelMap[1][1],
+              "mapa interpolado nao eh extremo");
+  TEST_ASSERT(lookupFuelPwX100(500, 25) == fuelMap[0][0],
+              "mapa clamp abaixo");
+  TEST_ASSERT(lookupFuelPwX100(5000, 110) == fuelMap[7][7],
+              "mapa clamp acima");
 
   // 2. Correcoes de combustivel.
   sensors.cltC = 10;
@@ -814,13 +820,32 @@ static void runSelfTests() {
   const uint16_t pwCut = applyFuelCorrections(pwBase, SIM_REV_DOWN);
   TEST_ASSERT(pwCut < expectedWarm, "corte na desaceleracao");
 
-  // 3. Protecoes do motor.
+  // Teste de correcoes isoladas com chaves de habilitacao.
+  sensors.cltC = 10;
+  sensors.iatC = 90;
+  sensors.tpsPct = 10;
+  lastTpsPct = 10;
+  corrAccelX1000 = 1000;
+  corrCutX1000 = 1000;
+  enableCorrIat = false;
+  enableCorrAccel = false;
+  enableCorrCut = false;
+  const uint16_t pwCltOnly = applyFuelCorrections(pwBase, SIM_IDLE);
+  TEST_ASSERT(pwCltOnly == (uint16_t)((uint32_t)pwBase * 1400 / 1000),
+              "correcao CLT isolada");
+  enableCorrIat = true;
+  enableCorrAccel = true;
+  enableCorrCut = true;
+
+  // 3. Protecoes do motor. Limite CLT = 105C (ativa em >= 105).
   measuredRpm = 3000;
   sensors.cltC = 80;
   TEST_ASSERT(applyProtections(1000) == 0, "protecao RPM limite");
   measuredRpm = 1000;
-  sensors.cltC = 105;
-  TEST_ASSERT(applyProtections(1000) == 0, "protecao CLT limite");
+  sensors.cltC = 104;
+  TEST_ASSERT(applyProtections(1000) == 1000, "protecao CLT abaixo do limite");
+  sensors.cltC = 106;
+  TEST_ASSERT(applyProtections(1000) == 0, "protecao CLT acima do limite");
   sensors.cltC = 80;
   TEST_ASSERT(applyProtections(1234) == 1234, "protecao normal");
 
