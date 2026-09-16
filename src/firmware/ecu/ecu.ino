@@ -122,6 +122,14 @@ static uint16_t corrIatX1000 = 1000;
 static uint16_t corrAccelX1000 = 1000;
 static uint16_t corrCutX1000 = 1000;
 static uint16_t corrLamX1000 = 1000;
+
+// Chaves para habilitar/desabilitar cada correcao individualmente.
+// Permitem testar cada fator de forma isolada e desligar no limp mode.
+static bool enableCorrClt = true;
+static bool enableCorrIat = true;
+static bool enableCorrAccel = true;
+static bool enableCorrCut = true;
+static bool enableCorrLam = true;
 static uint8_t protRpm = 0;
 static uint8_t protClt = 0;
 static unsigned long lastLamMs = 0;
@@ -275,49 +283,60 @@ static uint16_t lookupFuelPwX100(uint16_t rpm, uint16_t mapKpa) {
 }
 
 static uint16_t applyFuelCorrections(uint16_t pwMapX100, SimPhase phase) {
-  if (sensors.cltC >= 80) {
-    corrCltX1000 = 1000;
-  } else if (sensors.cltC <= 20) {
-    corrCltX1000 = 1400;
-  } else {
-    corrCltX1000 = (uint16_t)(1400 - ((int32_t)(sensors.cltC - 20) * 400) / 60);
-  }
-
-  if (sensors.iatC <= 20) {
-    corrIatX1000 = 1020;
-  } else if (sensors.iatC >= 50) {
-    corrIatX1000 = 970;
-  } else {
-    corrIatX1000 = (uint16_t)(1020 - ((int32_t)(sensors.iatC - 20) * 50) / 30);
-  }
-
-  if (sensors.tpsPct + 4 < lastTpsPct) {
-    // TPS caiu: nao e aceleracao
-  }
-  if (sensors.tpsPct > lastTpsPct + 4) {
-    corrAccelX1000 = 1180;
-  } else if (corrAccelX1000 > 1000) {
-    corrAccelX1000 = (uint16_t)(corrAccelX1000 - 15);
-    if (corrAccelX1000 < 1000) {
-      corrAccelX1000 = 1000;
+  if (enableCorrClt) {
+    if (sensors.cltC >= 80) {
+      corrCltX1000 = 1000;
+    } else if (sensors.cltC <= 20) {
+      corrCltX1000 = 1400;
+    } else {
+      corrCltX1000 = (uint16_t)(1400 - ((int32_t)(sensors.cltC - 20) * 400) / 60);
     }
+  } else {
+    corrCltX1000 = 1000;
+  }
+
+  if (enableCorrIat) {
+    if (sensors.iatC <= 20) {
+      corrIatX1000 = 1020;
+    } else if (sensors.iatC >= 50) {
+      corrIatX1000 = 970;
+    } else {
+      corrIatX1000 = (uint16_t)(1020 - ((int32_t)(sensors.iatC - 20) * 50) / 30);
+    }
+  } else {
+    corrIatX1000 = 1000;
+  }
+
+  if (enableCorrAccel) {
+    if (sensors.tpsPct > lastTpsPct + 4) {
+      corrAccelX1000 = 1180;
+    } else if (corrAccelX1000 > 1000) {
+      corrAccelX1000 = (uint16_t)(corrAccelX1000 - 15);
+      if (corrAccelX1000 < 1000) {
+        corrAccelX1000 = 1000;
+      }
+    }
+  } else {
+    corrAccelX1000 = 1000;
   }
   lastTpsPct = sensors.tpsPct;
 
-  if (phase == SIM_REV_DOWN) {
-    corrCutX1000 = 800;
-  } else if (phase == SIM_CRANK) {
-    corrCutX1000 = 1000;
+  if (enableCorrCut) {
+    if (phase == SIM_REV_DOWN) {
+      corrCutX1000 = 800;
+    } else {
+      corrCutX1000 = 1000;
+    }
   } else {
     corrCutX1000 = 1000;
   }
 
   uint32_t v = pwMapX100;
-  v = (v * corrCltX1000) / 1000;
-  v = (v * corrIatX1000) / 1000;
-  v = (v * corrAccelX1000) / 1000;
-  v = (v * corrCutX1000) / 1000;
-  v = (v * corrLamX1000) / 1000;
+  if (enableCorrClt)   v = (v * corrCltX1000) / 1000;
+  if (enableCorrIat)   v = (v * corrIatX1000) / 1000;
+  if (enableCorrAccel) v = (v * corrAccelX1000) / 1000;
+  if (enableCorrCut)   v = (v * corrCutX1000) / 1000;
+  if (enableCorrLam)   v = (v * corrLamX1000) / 1000;
   if (v > 65535) {
     v = 65535;
   }
