@@ -422,14 +422,18 @@ static const char *errorLevelName() {
 static void watchdogInit() {
   // WDT de 5 segundos. Se o loop principal travar, o ESP32 reinicia.
   // Em hardware real tambem recomenda-se um watchdog externo independente.
-  if (esp_task_wdt_init(kWatchdogTimeoutS, true) == ESP_OK) {
-    if (esp_task_wdt_add(NULL) == ESP_OK) {
-      watchdogEnabled = true;
-      Serial.println("[wdt] watchdog ativo (5s)");
-      return;
-    }
+  // Pode ja estar inicializado pelo Arduino core; nesse caso apenas adiciona a task.
+  esp_err_t initErr = esp_task_wdt_init(kWatchdogTimeoutS, true);
+  if (initErr != ESP_OK && initErr != ESP_ERR_INVALID_STATE) {
+    Serial.printf("[wdt] init err=%d\n", (int)initErr);
   }
-  Serial.println("[wdt] watchdog init falhou");
+  esp_err_t addErr = esp_task_wdt_add(NULL);
+  if (addErr == ESP_OK || addErr == ESP_ERR_INVALID_STATE) {
+    watchdogEnabled = true;
+    Serial.println("[wdt] watchdog ativo (5s)");
+    return;
+  }
+  Serial.printf("[wdt] add err=%d\n", (int)addErr);
 }
 
 static void watchdogReset() {
@@ -486,6 +490,12 @@ static void updateMeasuredRpm() {
       sync = 0;
     }
     return;
+  }
+
+  // Quando o sinal volta, limpa warnings de CKP/sync.
+  if (sync && ecuErrorLevel == ERR_WARNING &&
+      (ecuErrorCode == 101 || ecuErrorCode == 102)) {
+    clearEcuError();
   }
 
   // Se perdeu sincronismo por muito tempo, reporta warning e zera sync.
@@ -645,6 +655,16 @@ void IRAM_ATTR onCkpRise() {
   if (toothIndex < 254) {
     toothIndex++;
   }
+
+  // Se ja deveria ter visto o gap e nao viu, conta erro.
+  if (toothIndex >= kToothSlots - 1) {
+    toothIndex = 0;
+    if (++triggerErrorCount >= kMaxTriggerErrors) {
+      triggerErrorCount = 0;
+      synced = 0;
+    }
+  }
+
   if (toothIndex == 18) {
     if (camRev == 0) {
       scheduleInj(1);
@@ -890,6 +910,13 @@ void displayTick() {
 } while (0)
 
 static void runSelfTests() {
+  // Remove a task do watchdog durante os testes para nao resetar
+  // enquanto mostra o relatorio final.
+  if (watchdogEnabled) {
+    esp_task_wdt_delete(NULL);
+    watchdogEnabled = false;
+  }
+
   uint16_t pass = 0, fail = 0, total = 0;
   Serial.println("\n[test] === SELF-TEST START ===");
 
