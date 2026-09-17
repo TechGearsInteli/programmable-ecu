@@ -623,10 +623,15 @@ void IRAM_ATTR onCkpRise() {
 
   // Deteccao de gap por razao entre intervalos. Para 36-1 o gap vale
   // aproximadamente 2 dentes, entao espera-se ratio entre 1.5x e 3.0x.
+  // Se ainda nao temos lastValidDtUs (primeiros pulsos), usamos a heuristica
+  // anterior (1.5x o ultimo intervalo) para sincronizar na primeira volta.
   bool isGap = false;
   if (lastValidDtUs > 0) {
     const uint32_t ratioX10 = (dt * 10UL) / lastValidDtUs;
     isGap = (ratioX10 >= kGapRatioMinX10 && ratioX10 <= kGapRatioMaxX10);
+  } else if (lastToothDtUs > kTriggerFilterMinDtUs &&
+             dt > lastToothDtUs + (lastToothDtUs >> 1)) {
+    isGap = true;
   }
 
   if (isGap) {
@@ -652,6 +657,7 @@ void IRAM_ATTR onCkpRise() {
   }
 
   lastValidDtUs = dt;
+  lastToothDtUs = dt;
   if (toothIndex < 254) {
     toothIndex++;
   }
