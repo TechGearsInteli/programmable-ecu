@@ -145,6 +145,34 @@ A injeção sequencial atual funciona com `camRev` simulado. Para sequencial rea
 - **Limp mode:** mapa conservador quando sensores críticos falham.
 - **Datalog estruturado:** buffer circular com timestamp, RPM, sensores, PW, proteções ativas.
 
+#### Níveis de erro no estilo rusEFI
+
+Projetos maduros separam erros em camadas para não reiniciar o microcontrolador por qualquer falha menor:
+
+| Nível | Significado | Exemplo | Ação |
+|---|---|---|---|
+| **Warning** | Falha recuperável de runtime | Leitura de sensor fora da faixa por instantes | Marca falha, usa valor default ou último válido |
+| **Config error** | Erro de calibração/tune | Mapa com células inconsistentes | Reporta na interface, usa mapa seguro |
+| **Firmware error** | Bug interno detectado | Cálculo retornou NaN | Desliga função afetada, loga o erro |
+| **Critical error** | Estado inseguro continuar | Perda total de CKP, over-rev persistente | Reset seguro ou corte total de atuadores |
+
+Isso evita que uma falha leve (ex.: lambda desconectada momentaneamente) cause reboot completo e perda de dados de telemetria.
+
+#### Watchdog Manager no estilo AUTOSAR
+
+O AUTOSAR usa três supervisões ligadas a um watchdog de hardware:
+
+- **Alive supervision:** verifica se tarefas críticas executam na frequência esperada (nem muito rápido, nem muito devagar).
+- **Deadline supervision:** verifica se uma tarefa termina dentro do tempo máximo configurado.
+- **Logical supervision:** verifica se o código executa na sequência correta (ex.: A → B → C, sem saltos).
+
+No ESP32 isso pode ser feito com:
+
+1. Um **watchdog de hardware** (TWDT) alimentado pela task principal.
+2. Checkpoints em cada fase do loop de controle.
+3. Se uma fase não reportar dentro do deadline, o watchdog reinicia o sistema.
+4. Armazenamento do último checkpoint atingido na RTC memory ou NVS para diagnóstico pós-reboot.
+
 ### 4.5 Qualidade de código
 
 - Separar `ecu.ino` em módulos: `engine.cpp`, `sensors.cpp`, `display.cpp`, `storage.cpp`.
@@ -311,7 +339,20 @@ A arquitetura dual-core do ESP32 é ideal para separar o que é crítico do que 
 - Eventos agendados até o próximo dente do trigger (`scheduleEventsUntilNextTriggerTooth`).
 - Combina eventos de trigger com offsets de tempo.
 
-### 11.4 Lição para o nosso firmware
+### 11.4 Decodificação robusta de trigger wheel
+
+A roda fônica real é muito mais suja que a simulação. Projetos como Speeduino, MegaSquirt e rusEFI usam várias técnicas para não perder sincronismo com ruído:
+
+- **Gap ratio:** detectar a falha comparando o intervalo atual com o anterior. Para 36-1, se o gap atual for ~1,5× a 3× o anterior, é o dente faltante.
+- **Time mask / percentage mask:** após capturar uma borda, ignorar novas interrupções por um tempo curto (ex.: 0,2 ms) ou por uma fração do intervalo esperado, para filtrar ruído de bobina/VR.
+- **Trigger filter:** rejeitar pulsos que chegam antes do tempo mínimo esperado para o RPM atual.
+- **Re-sync every cycle:** voltar a procurar o ponto de sincronismo a cada volta, garantindo que um dente perdido não deixe o sistema perdido para sempre.
+- **Tooth logger / composite logger:** gravar os tempos entre dentes para diagnóstico. Barras divididas no missing tooth indicam ruído; barras vermelhas indicam perda de sync.
+- **Loss of sync:** se o número de dentes entre gaps estiver errado, desligar faísca/injeção até re-sincronizar.
+
+Lição: o decoder do firmware atual assume pulso limpo. Para rodar no carro, precisa de filtro de tempo mínimo, validação de contagem de dentes e estado de `synced` que pode cair para `false`.
+
+### 11.5 Lição para o nosso firmware
 
 - Nunca usar `delay()` ou `micros()` em espera ocupada para acionar injetor/bobina.
 - Sempre usar timer de hardware com alarme/ISR.
@@ -433,3 +474,10 @@ Com base na pesquisa, as melhorias de maior impacto para tornar o firmware "bom 
 19. ESP-IDF MCPWM: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/mcpwm.html
 20. ESP-IDF FreeRTOS (dual-core): https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/freertos_idf.html
 21. Homebrew ECU + touchscreen dash (ESP32-S3): https://www.reddit.com/r/esp32/comments/1nmpiy4/homebrew_ecu_touchscreen_dash_rev_4_esp32s3_espidf/
+22. Speeduino Trigger Patterns and Decoders: https://wiki.speeduino.com/decoders
+23. Speeduino Missing Tooth Decoder: https://wiki.speeduino.com/en/decoders/Missing_Tooth
+24. DIYAutoTune — Tooth Logger / Composite Logger: https://diyautotune.com/blogs/how-to-guides/using-the-tooth-logger-and-composite-logger
+25. MegaSquirt Missing Tooth Wheel Decoder: http://www.megamanual.com/ms2/wheel.htm
+26. AUTOSAR Watchdog Manager Specification: https://www.autosar.org/fileadmin/standards/R4.3.1/CP/AUTOSAR_SWS_WatchdogManager.pdf
+27. AUTOSAR Functional Safety Measures: https://autosar.org/fileadmin/standards/R22-11/CP/AUTOSAR_EXP_FunctionalSafetyMeasures.pdf
+28. ISO 26262 and AUTOSAR Functional Safety: https://piembsystech.com/iso-26262-and-autosar-functional-safety/
