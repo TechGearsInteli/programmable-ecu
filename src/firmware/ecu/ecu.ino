@@ -12,6 +12,7 @@
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 
 static const int kPulsePin = 4;
 static const int kInjPins[4] = {2, 14, 15, 33};
@@ -89,8 +90,18 @@ static volatile uint32_t revUs = 0;
 static volatile uint32_t pulseCount = 0;
 static volatile uint8_t toothIndex = 0;
 static volatile uint8_t synced = 0;
+static volatile uint32_t lastSyncUs = 0;
+static volatile uint8_t triggerErrorCount = 0;
+static volatile uint32_t lastValidDtUs = 0;
 static volatile uint8_t camRev = 0;
 static volatile uint32_t injPwUs = 8000;
+
+// Parametros de decodificacao robusta do trigger wheel.
+static const uint16_t kGapRatioMinX10 = 15; // 1.5x
+static const uint16_t kGapRatioMaxX10 = 30; // 3.0x
+static const uint32_t kTriggerFilterMinDtUs = 80;
+static const uint32_t kSyncLossTimeoutUs = 500000; // 500 ms
+static const uint8_t kMaxTriggerErrors = 3;
 static volatile uint8_t injBusy[4];
 static volatile uint32_t injOffUs[4];
 static volatile uint32_t injCount[4];
@@ -130,6 +141,25 @@ static bool enableCorrIat = true;
 static bool enableCorrAccel = true;
 static bool enableCorrCut = true;
 static bool enableCorrLam = true;
+
+// ---------- Niveis de erro e watchdog ----------
+// Separar erros em camadas evita reiniciar o MCU por falha leve.
+enum EcuErrorLevel : uint8_t {
+  ERR_NONE = 0,
+  ERR_WARNING,      // recuperavel: sensor fora da faixa, valor default usado
+  ERR_CONFIG,       // erro de calibracao/tune
+  ERR_FIRMWARE,     // bug detectado: funcao desativada, loga erro
+  ERR_CRITICAL      // estado inseguro: corte total ou reset
+};
+
+static EcuErrorLevel ecuErrorLevel = ERR_NONE;
+static uint32_t ecuErrorCode = 0;      // codigo da ultima falha
+static unsigned long ecuErrorSince = 0; // millis da primeira ocorrencia
+static bool ecuCriticalShutdown = false; // true = corte geral de atuadores
+
+static const uint32_t kWatchdogTimeoutS = 5;
+static bool watchdogEnabled = false;
+
 static uint8_t protRpm = 0;
 static uint8_t protClt = 0;
 static unsigned long lastLamMs = 0;
@@ -352,6 +382,62 @@ static uint16_t applyProtections(uint16_t pw) {
   return pw;
 }
 
+// ---------- Niveis de erro ----------
+// Registra uma falha. Niveis mais graves sobrescrevem os mais leves.
+// Acoes imediatas:
+//   WARNING    -> usa valor default, continua funcionando
+//   CONFIG     -> usa mapa seguro, sinaliza interface
+//   FIRMWARE   -> desliga funcionalidade afetada, loga
+//   CRITICAL   -> corte total de atuadores (ou watchdog reset)
+static void setEcuError(EcuErrorLevel level, uint32_t code) {
+  if (level < ecuErrorLevel) {
+    return;
+  }
+  ecuErrorLevel = level;
+  ecuErrorCode = code;
+  ecuErrorSince = millis();
+  if (level == ERR_CRITICAL) {
+    ecuCriticalShutdown = true;
+  }
+}
+
+static void clearEcuError() {
+  ecuErrorLevel = ERR_NONE;
+  ecuErrorCode = 0;
+  ecuErrorSince = 0;
+  ecuCriticalShutdown = false;
+}
+
+static const char *errorLevelName() {
+  switch (ecuErrorLevel) {
+    case ERR_WARNING:   return "WARN";
+    case ERR_CONFIG:    return "CONFIG";
+    case ERR_FIRMWARE:  return "FIRM";
+    case ERR_CRITICAL:  return "CRIT";
+    default:            return "OK";
+  }
+}
+
+// ---------- Watchdog ----------
+static void watchdogInit() {
+  // WDT de 5 segundos. Se o loop principal travar, o ESP32 reinicia.
+  // Em hardware real tambem recomenda-se um watchdog externo independente.
+  if (esp_task_wdt_init(kWatchdogTimeoutS, true) == ESP_OK) {
+    if (esp_task_wdt_add(NULL) == ESP_OK) {
+      watchdogEnabled = true;
+      Serial.println("[wdt] watchdog ativo (5s)");
+      return;
+    }
+  }
+  Serial.println("[wdt] watchdog init falhou");
+}
+
+static void watchdogReset() {
+  if (watchdogEnabled) {
+    esp_task_wdt_reset();
+  }
+}
+
 static void updateLambdaClosedLoop(SimPhase phase) {
   const unsigned long now = millis();
   if (now - lastLamMs < 80) {
@@ -382,20 +468,39 @@ static void updateMeasuredRpm() {
   const uint32_t now = micros();
   uint32_t revolutionUs;
   uint32_t lastRise;
+  uint8_t sync;
+  uint32_t lastSync;
   noInterrupts();
   revolutionUs = revUs;
   lastRise = lastRiseUs;
+  sync = synced;
+  lastSync = lastSyncUs;
   interrupts();
 
   // Se nao houver pulso CKP por 500 ms, considera motor parado.
   if ((now - lastRise) > 500000UL) {
     lastGoodRpm = 0;
     measuredRpm = 0;
+    if (sync) {
+      setEcuError(ERR_WARNING, 101); // CKP timeout
+      sync = 0;
+    }
     return;
   }
 
-  if (revolutionUs >= 10000 && revolutionUs <= 300000) {
+  // Se perdeu sincronismo por muito tempo, reporta warning e zera sync.
+  if (sync && (now - lastSync) > kSyncLossTimeoutUs) {
+    setEcuError(ERR_WARNING, 102); // sync loss timeout
+    noInterrupts();
+    synced = 0;
+    sync = 0;
+    interrupts();
+  }
+
+  if (sync && revolutionUs >= 10000 && revolutionUs <= 300000) {
     lastGoodRpm = 60000000UL / revolutionUs;
+  } else if (!sync) {
+    lastGoodRpm = 0;
   }
   measuredRpm = lastGoodRpm;
 }
@@ -498,11 +603,26 @@ void IRAM_ATTR onToothTimer() {
 void IRAM_ATTR onCkpRise() {
   const uint32_t now = micros();
   const uint32_t dt = now - lastRiseUs;
+
+  // Trigger filter: rejeita pulsos muito proximos (ruido/ringing).
+  if (dt < kTriggerFilterMinDtUs) {
+    return;
+  }
   lastRiseUs = now;
   pulseCount++;
 
-  if (lastToothDtUs > 80 && dt > lastToothDtUs + (lastToothDtUs >> 1)) {
+  // Deteccao de gap por razao entre intervalos. Para 36-1 o gap vale
+  // aproximadamente 2 dentes, entao espera-se ratio entre 1.5x e 3.0x.
+  bool isGap = false;
+  if (lastValidDtUs > 0) {
+    const uint32_t ratioX10 = (dt * 10UL) / lastValidDtUs;
+    isGap = (ratioX10 >= kGapRatioMinX10 && ratioX10 <= kGapRatioMaxX10);
+  }
+
+  if (isGap) {
     synced = 1;
+    lastSyncUs = now;
+    triggerErrorCount = 0;
     toothIndex = 0;
     if (lastGapUs != 0) {
       revUs = now - lastGapUs;
@@ -513,22 +633,25 @@ void IRAM_ATTR onCkpRise() {
     } else {
       scheduleInj(2);
     }
+    // Estima duracao de um dente normal apos o gap (dt / ratio minimo).
+    lastValidDtUs = (dt * 10UL) / kGapRatioMinX10;
+    if (lastValidDtUs == 0) {
+      lastValidDtUs = 1;
+    }
     return;
   }
 
-  if (dt > 80) {
-    lastToothDtUs = dt;
-    if (toothIndex < 254) {
-      toothIndex++;
+  lastValidDtUs = dt;
+  if (toothIndex < 254) {
+    toothIndex++;
+  }
+  if (toothIndex == 18) {
+    if (camRev == 0) {
+      scheduleInj(1);
+    } else {
+      scheduleInj(3);
     }
-    if (toothIndex == 18) {
-      if (camRev == 0) {
-        scheduleInj(1);
-      } else {
-        scheduleInj(3);
-      }
-      camRev ^= 1;
-    }
+    camRev ^= 1;
   }
 }
 
@@ -712,8 +835,12 @@ void displayTick() {
   tft.setTextSize(2);
   tft.fillRect(12, 72, 460, 28, TFT_BLACK);
   tft.setCursor(12, 72);
-  tft.printf("RPM %u  %s  %s", measuredRpm, phaseName(simPhase),
-             protRpm ? "LIM" : (protClt ? "HOT" : (isSynced ? "OK" : "--")));
+  const char *status = protRpm ? "LIM" : (protClt ? "HOT" : (isSynced ? "OK" : "--"));
+  if (ecuErrorLevel != ERR_NONE) {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+  }
+  tft.printf("RPM %u  %s  %s  %s", measuredRpm, phaseName(simPhase), status, errorLevelName());
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
 
   const int barW = tft.width() - 24;
   const int filled = (int)((measuredRpm * (uint32_t)barW) / 4000UL);
@@ -746,9 +873,10 @@ void displayTick() {
 
   if (now - lastSerialMs >= 2000) {
     lastSerialMs = now;
-    Serial.printf("[nvs] src=%s cel00=%u rpm=%u PWf=%u.%02u\n",
+    Serial.printf("[nvs] src=%s cel00=%u rpm=%u PWf=%u.%02u err=%s/%u sync=%u\n",
                   mapFromNvs ? "flash" : "padrao", fuelMap[0][0], measuredRpm,
-                  fuelPwFinalX100 / 100, fuelPwFinalX100 % 100);
+                  fuelPwFinalX100 / 100, fuelPwFinalX100 % 100,
+                  errorLevelName(), ecuErrorCode, (unsigned)synced);
   }
 }
 
@@ -889,6 +1017,7 @@ void setup() {
   Serial.println("programmable-ecu #142 self-test (!) | NVS T/S/D");
   engineStartMs = millis();
   mapLoadNvs();
+  watchdogInit();
 
   // Opcao de self-test no boot: mantem a porta aberta e aperta '!' ao resetar.
   const unsigned long testWaitStart = millis();
@@ -907,4 +1036,5 @@ void loop() {
   mapPollSerial();
   simTick();
   displayTick();
+  watchdogReset();
 }
