@@ -311,6 +311,65 @@ static void drawButtonHint(int x, int y, const char *key, const char *txt) {
   tft.print(txt);
 }
 
+static void drawSnowflake(int cx, int cy, int r) {
+  for (int i = 0; i < 6; i++) {
+    const float a = (float)i * 60.0f * PI / 180.0f;
+    const int x1 = cx + (int)(r * cosf(a));
+    const int y1 = cy + (int)(r * sinf(a));
+    tft.drawLine(cx, cy, x1, y1, TFT_CYAN);
+    tft.drawLine(cx + 1, cy, x1 + 1, y1, TFT_CYAN);
+    const int mx = cx + (int)(0.55f * r * cosf(a));
+    const int my = cy + (int)(0.55f * r * sinf(a));
+    const float a1 = a + 0.55f;
+    const float a2 = a - 0.55f;
+    const int br = r / 3;
+    tft.drawLine(mx, my, mx + (int)(br * cosf(a1)), my + (int)(br * sinf(a1)), TFT_CYAN);
+    tft.drawLine(mx, my, mx + (int)(br * cosf(a2)), my + (int)(br * sinf(a2)), TFT_CYAN);
+  }
+  tft.fillCircle(cx, cy, 3, TFT_WHITE);
+}
+
+static void drawFlame(int cx, int cy, int r) {
+  tft.fillTriangle(cx, cy - r, cx - r + 2, cy + r / 3, cx + r - 2, cy + r / 3, TFT_RED);
+  tft.fillTriangle(cx, cy - r + 6, cx - r / 2, cy + r / 4, cx + r / 2, cy + r / 4, TFT_ORANGE);
+  tft.fillTriangle(cx, cy - r / 3, cx - r / 4, cy + r / 3, cx + r / 4, cy + r / 3, TFT_YELLOW);
+  tft.fillCircle(cx, cy + r / 3, r / 3, TFT_RED);
+}
+
+static void drawHazard(int cx, int cy, int r) {
+  const int topY = cy - r;
+  const int botY = cy + r;
+  const int half = r;
+  tft.fillTriangle(cx, topY, cx - half, botY, cx + half, botY, TFT_YELLOW);
+  tft.drawTriangle(cx, topY, cx - half, botY, cx + half, botY, TFT_BLACK);
+  tft.fillRect(cx - 2, cy - r / 3, 5, r / 2 + 4, TFT_BLACK);
+  tft.fillCircle(cx, cy + r / 2, 3, TFT_BLACK);
+}
+
+static void drawIconPanel() {
+  const int size = 54;
+  const int gap = 6;
+  const int y = tft.height() - size - 8;
+  const int xHazard = tft.width() - size - 8;
+  const int xFlame = xHazard - size - gap;
+  const int xSnow = xFlame - size - gap;
+
+  tft.fillRect(xSnow, y, size, size, TFT_BLACK);
+  if (coldMode) {
+    drawSnowflake(xSnow + size / 2, y + size / 2, size / 2 - 6);
+  }
+
+  tft.fillRect(xFlame, y, size, size, TFT_BLACK);
+  if (hotMode || cltC >= kCltLimitC) {
+    drawFlame(xFlame + size / 2, y + size / 2, size / 2 - 6);
+  }
+
+  tft.fillRect(xHazard, y, size, size, TFT_BLACK);
+  if (engineOn && rpm >= kRpmRedFrom) {
+    drawHazard(xHazard + size / 2, y + size / 2 - 2, size / 2 - 4);
+  }
+}
+
 static void drawStatic() {
   tft.fillScreen(TFT_BLACK);
   gCx = tft.width() / 2;
@@ -390,6 +449,8 @@ static void drawDynamic() {
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.print("Sistema normal");
   }
+
+  drawIconPanel();
 }
 
 static void engineProcess(unsigned long dtMs) {
