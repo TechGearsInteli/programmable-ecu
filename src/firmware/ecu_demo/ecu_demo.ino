@@ -24,6 +24,8 @@
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
 #include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
 #ifndef PI
 #define PI 3.14159265f
@@ -89,7 +91,6 @@ static const int kBtnLimitPin = 2;
 static const uint32_t kIdleRpm = 900;
 static const uint32_t kMaxRpm = 6500;     // fundo de escala do gauge
 static const uint32_t kRpmLimit = 6000;   // corte de seguranca
-static const uint32_t kRpmRedZone = 5000; // inicio da faixa vermelha no gauge
 static const int16_t kCltLimitC = 105;
 static const uint16_t kNormalCltC = 88;
 static const uint16_t kAmbientCltC = 18;
@@ -161,16 +162,19 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
 static void drawGaugeRPM(int cx, int cy, int r) {
   const int thick = 12;
 
-  // Angulos da faixa vermelha (zona de perigo)
-  const float redStartFrac = clamp((int)kRpmRedZone, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float redEndFrac   = clamp((int)kRpmLimit, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float redStartAngle = 135.0f + redStartFrac * 270.0f;
-  const float redEndAngle   = 135.0f + redEndFrac * 270.0f;
+  // Angulos da faixa colorida do fundo do gauge
+  const float greenEndFrac  = clamp(2000, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float yellowEndFrac = clamp(4000, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float orangeEndFrac = clamp(5000, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float greenEndAngle  = 135.0f + greenEndFrac * 270.0f;
+  const float yellowEndAngle = 135.0f + yellowEndFrac * 270.0f;
+  const float orangeEndAngle = 135.0f + orangeEndFrac * 270.0f;
 
-  // Fundo do arco: cinza, com zona vermelha marcada
-  drawArc(cx, cy, r, thick, 135.0f, redStartAngle, TFT_DARKGREY);
-  drawArc(cx, cy, r, thick, redStartAngle, redEndAngle, TFT_RED);
-  drawArc(cx, cy, r, thick, redEndAngle, 405.0f, TFT_DARKGREY);
+  // Fundo do arco com cores de zona
+  drawArc(cx, cy, r, thick, 135.0f, greenEndAngle, TFT_DARKGREEN);
+  drawArc(cx, cy, r, thick, greenEndAngle, yellowEndAngle, TFT_YELLOW);
+  drawArc(cx, cy, r, thick, yellowEndAngle, orangeEndAngle, TFT_ORANGE);
+  drawArc(cx, cy, r, thick, orangeEndAngle, 405.0f, TFT_RED);
 
   // Parte preenchida por cima
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
@@ -202,20 +206,30 @@ static void drawBarStatic(const char *label, int x, int y, int w, int h) {
 
 static void drawBarValue(int x, int y, int w, int h,
                          int value, int minV, int maxV, uint16_t color,
-                         int valX, const char *fmt, ...) {
+                         const char *fmt, ...) {
   // Limpa preenchimento anterior
   tft.fillRect(x + 1, y + 1, w - 2, h - 2, TFT_DARKGREY);
   const int filled = clamp((value - minV) * (w - 2) / (maxV - minV), 0, w - 2);
-  tft.fillRect(x + 1, y + 1, filled, h - 2, color);
+  if (filled > 0) {
+    tft.fillRect(x + 1, y + 1, filled, h - 2, color);
+  }
 
-  // Valor numerico ao lado com background preto
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setTextSize(1);
-  tft.setCursor(valX, y + 4);
+  // Valor numerico dentro da barra, alinhado a direita
+  char buf[16];
   va_list args;
   va_start(args, fmt);
-  tft.vprintf(fmt, args);
+  vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
+
+  const int pad = 4;
+  const int textW = strlen(buf) * 6; // fonte 1 = 6 px por caractere
+  const int textX = x + w - pad - textW;
+  // Apaga uma pequena area atras do texto para legibilidade
+  tft.fillRect(textX - 2, y + 2, textW + 4, h - 4, TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextSize(1);
+  tft.setCursor(textX, y + 4);
+  tft.print(buf);
 }
 
 static void drawStatusBox(int x, int y, const char *label, bool active, uint16_t activeColor) {
@@ -283,13 +297,13 @@ static void drawDynamic() {
   // Gauge RPM no centro superior (raio menor para nao cobrir as barras)
   drawGaugeRPM(tft.width() / 2, 100, 56);
 
-  // Barras de sensores (valores)
-  drawBarValue(12, 200, 140, 18, tps, 0, 100, TFT_GREEN, 12 + 142, "%u%%");
-  drawBarValue(168, 200, 140, 18, mapKpa, 30, 100, TFT_YELLOW, 168 + 142, "%u");
-  drawBarValue(12, 250, 140, 18, cltC, 0, 120, colorForClt(cltC), 12 + 142, "%d");
-  drawBarValue(168, 250, 140, 18, iatC, 0, 60, TFT_ORANGE, 168 + 142, "%d");
-  drawBarValue(12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN, 12 + 142, "%u.%02u", lambdaX100 / 100, lambdaX100 % 100);
-  drawBarValue(168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE, 168 + 142, "%u.%02u", fuelPwX100 / 100, fuelPwX100 % 100);
+  // Barras de sensores (valores dentro da barra)
+  drawBarValue(12, 200, 140, 18, tps, 0, 100, TFT_GREEN, "%u%%", tps);
+  drawBarValue(168, 200, 140, 18, mapKpa, 30, 100, TFT_YELLOW, "%u", mapKpa);
+  drawBarValue(12, 250, 140, 18, cltC, 0, 120, colorForClt(cltC), "%d", cltC);
+  drawBarValue(168, 250, 140, 18, iatC, 0, 60, TFT_ORANGE, "%d", iatC);
+  drawBarValue(12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN, "%u.%02u", lambdaX100 / 100, lambdaX100 % 100);
+  drawBarValue(168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE, "%u.%02u", fuelPwX100 / 100, fuelPwX100 % 100);
 
   // Caixas de status
   drawStatusBox(12, 340, "POWER", engineOn, engineOn ? TFT_GREEN : TFT_RED);
@@ -412,9 +426,15 @@ static void engineProcess(unsigned long dtMs) {
   if (limiterOn && targetRpm > kRpmLimit) {
     targetRpm = kRpmLimit;
   }
-  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 80.0f, dtMs);
 
-  // Protecao: se superaquecer ou limitador ativo, zera combustivel
+  // Protecao: se superaquecer, o motor perde forca e desacelera
+  if (cltC >= kCltLimitC) {
+    targetRpm = kIdleRpm / 2; // cai para ~450 rpm (motor "morrendo")
+  }
+
+  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 600.0f, dtMs);
+
+  // Corte de combustivel no superaquecimento ou limitador ativo
   bool cutFuel = (cltC >= kCltLimitC) || (limiterOn && rpm >= kRpmLimit);
 
   // Calculo de PW (simplificado, nao usa mapa real neste demo)
