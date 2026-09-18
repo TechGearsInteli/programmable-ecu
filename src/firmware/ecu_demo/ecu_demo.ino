@@ -103,7 +103,7 @@ static const uint16_t kHotIatC = 55;
 // ---------- Estado do motor ----------
 static EcuDisplay tft;
 static bool engineOn = false;
-static bool btnAccelHeld = false;
+static bool accelMode = false;  // toggle: true = pedal acionado
 static bool coldMode = false;
 static bool hotMode = false;
 static bool limiterOn = false;
@@ -127,9 +127,7 @@ static int clamp(int v, int lo, int hi) {
 }
 
 static uint16_t colorForRpm(uint32_t value) {
-  if (value < 2000) return TFT_GREEN;
-  if (value < 4000) return TFT_YELLOW;
-  if (value < 5000) return TFT_ORANGE;
+  if (value < 5000) return TFT_GREEN;
   return TFT_RED;
 }
 
@@ -162,19 +160,13 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
 static void drawGaugeRPM(int cx, int cy, int r) {
   const int thick = 12;
 
-  // Angulos da faixa colorida do fundo do gauge
-  const float greenEndFrac  = clamp(2000, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float yellowEndFrac = clamp(4000, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float orangeEndFrac = clamp(5000, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float greenEndAngle  = 135.0f + greenEndFrac * 270.0f;
-  const float yellowEndAngle = 135.0f + yellowEndFrac * 270.0f;
-  const float orangeEndAngle = 135.0f + orangeEndFrac * 270.0f;
+  // Angulo de inicio da zona vermelha (5000 rpm)
+  const float redStartFrac = clamp(5000, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float redStartAngle = 135.0f + redStartFrac * 270.0f;
 
-  // Fundo do arco com cores de zona
-  drawArc(cx, cy, r, thick, 135.0f, greenEndAngle, TFT_DARKGREEN);
-  drawArc(cx, cy, r, thick, greenEndAngle, yellowEndAngle, TFT_YELLOW);
-  drawArc(cx, cy, r, thick, yellowEndAngle, orangeEndAngle, TFT_ORANGE);
-  drawArc(cx, cy, r, thick, orangeEndAngle, 405.0f, TFT_RED);
+  // Fundo do arco: verde ate 5000 rpm, vermelho ate o final
+  drawArc(cx, cy, r, thick, 135.0f, redStartAngle, TFT_DARKGREEN);
+  drawArc(cx, cy, r, thick, redStartAngle, 405.0f, TFT_RED);
 
   // Parte preenchida por cima
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
@@ -370,7 +362,7 @@ static void engineProcess(unsigned long dtMs) {
   engineTempTimer += dtMs / 1000.0f;
 
   // TPS: acelera e solta devagar (pedal eletronico)
-  const uint8_t targetTps = btnAccelHeld ? (uint8_t)85 : (uint8_t)8;
+  const uint8_t targetTps = accelMode ? (uint8_t)85 : (uint8_t)8;
   tps = (uint8_t)moveTowards((int32_t)tps, targetTps, 45.0f, dtMs);
 
   // IAT: segue ambiente + influencia leve de carga
@@ -444,7 +436,7 @@ static void engineProcess(unsigned long dtMs) {
   if (cltC < 20) basePw = (uint16_t)(basePw * 140 / 100);
   else if (cltC < 80) basePw = (uint16_t)(basePw * (100 + (80 - cltC) / 2) / 100);
   // Correcao aceleracao: +18%
-  if (btnAccelHeld && tps > 20) basePw = (uint16_t)(basePw * 118 / 100);
+  if (accelMode && tps > 20) basePw = (uint16_t)(basePw * 118 / 100);
 
   fuelPwX100 = cutFuel ? 0 : basePw;
 }
@@ -464,10 +456,15 @@ static void readButtons() {
   // POWER: toggle no flanco de descida
   if (pressed[0] && !wasPressed[0]) {
     engineOn = !engineOn;
-    if (!engineOn) rpm = 0;
+    if (!engineOn) {
+      rpm = 0;
+      accelMode = false; // solta o acelerador ao desligar
+    }
   }
-  // ACCEL: mantem pressionado
-  btnAccelHeld = pressed[1];
+  // ACCEL: toggle (aperta uma vez para acelerar, outra para soltar)
+  if (pressed[1] && !wasPressed[1]) {
+    accelMode = !accelMode;
+  }
   // COLD: toggle
   if (pressed[2] && !wasPressed[2]) coldMode = !coldMode;
   // HOT: toggle
@@ -491,7 +488,7 @@ static void readTouch() {
       // Areas correspondem as legendas de botoes na parte inferior
       if (ty > 440) {
         if (tx < 70) engineOn = !engineOn;
-        else if (tx < 160) btnAccelHeld = true;
+        else if (tx < 160) accelMode = !accelMode;
         else if (tx < 230) coldMode = !coldMode;
         else if (tx < 310) hotMode = !hotMode;
         else limiterOn = !limiterOn;
@@ -500,7 +497,6 @@ static void readTouch() {
     wasTouched = true;
   } else {
     wasTouched = false;
-    btnAccelHeld = false; // solta acelerador se so touch estiver solto
   }
 }
 
@@ -553,9 +549,9 @@ void loop() {
 
   if (now - lastSerialMs >= 1000) {
     lastSerialMs = now;
-    Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d iat=%d pw=%u.%02u lim=%u cold=%u hot=%u\n",
+    Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d iat=%d pw=%u.%02u acc=%u lim=%u cold=%u hot=%u\n",
                   engineOn, rpm, tps, mapKpa, cltC, iatC,
                   fuelPwX100 / 100, fuelPwX100 % 100,
-                  limiterOn, coldMode, hotMode);
+                  accelMode, limiterOn, coldMode, hotMode);
   }
 }
