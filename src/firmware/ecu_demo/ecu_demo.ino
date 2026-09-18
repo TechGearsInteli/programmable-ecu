@@ -84,7 +84,7 @@ static const int kBtnLimitPin = 2;
 // ---------- Constantes de simulacao ----------
 static const uint32_t kIdleRpm = 900;
 static const uint32_t kMaxRpm = 6000;
-static const uint32_t kRpmLimit = 6000;
+static const uint32_t kRpmLimit = 3000;
 static const uint32_t kRpmRedFrom = 5000;
 static const float kIdleTps = 8.0f;
 static const float kFullTps = 100.0f;
@@ -346,27 +346,43 @@ static void drawHazard(int cx, int cy, int r) {
   tft.fillCircle(cx, cy + r / 2, 3, TFT_BLACK);
 }
 
+static void drawLimiterIcon(int cx, int cy, int r) {
+  tft.fillCircle(cx, cy, r, TFT_ORANGE);
+  tft.drawCircle(cx, cy, r, TFT_BLACK);
+  tft.setTextDatum(middle_center);
+  tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+  tft.setTextSize(1);
+  tft.drawString("LIM", cx, cy - 6);
+  tft.drawString("3k", cx, cy + 6);
+  tft.setTextDatum(top_left);
+}
+
 static void drawIconPanel() {
-  const int size = 54;
-  const int gap = 6;
-  const int y = tft.height() - size - 8;
-  const int xHazard = tft.width() - size - 8;
-  const int xFlame = xHazard - size - gap;
-  const int xSnow = xFlame - size - gap;
+  const int size = 50;
+  const int gap = 4;
+  const int x1 = tft.width() - size - 8;
+  const int x0 = x1 - size - gap;
+  const int y1 = tft.height() - size - 8;
+  const int y0 = y1 - size - gap;
 
-  tft.fillRect(xSnow, y, size, size, TFT_BLACK);
+  tft.fillRect(x0, y0, size, size, TFT_BLACK);
   if (coldMode) {
-    drawSnowflake(xSnow + size / 2, y + size / 2, size / 2 - 6);
+    drawSnowflake(x0 + size / 2, y0 + size / 2, size / 2 - 6);
   }
 
-  tft.fillRect(xFlame, y, size, size, TFT_BLACK);
+  tft.fillRect(x1, y0, size, size, TFT_BLACK);
   if (hotMode || cltC >= kCltLimitC) {
-    drawFlame(xFlame + size / 2, y + size / 2, size / 2 - 6);
+    drawFlame(x1 + size / 2, y0 + size / 2, size / 2 - 6);
   }
 
-  tft.fillRect(xHazard, y, size, size, TFT_BLACK);
+  tft.fillRect(x0, y1, size, size, TFT_BLACK);
+  if (limiterOn && engineOn) {
+    drawLimiterIcon(x0 + size / 2, y1 + size / 2, size / 2 - 4);
+  }
+
+  tft.fillRect(x1, y1, size, size, TFT_BLACK);
   if (engineOn && rpm >= kRpmRedFrom) {
-    drawHazard(xHazard + size / 2, y + size / 2 - 2, size / 2 - 4);
+    drawHazard(x1 + size / 2, y1 + size / 2 - 2, size / 2 - 4);
   }
 }
 
@@ -402,7 +418,7 @@ static void drawStatic() {
   drawButtonHint(90, 446, "A", "Acelerar");
   drawButtonHint(180, 446, "C", "Ar/Agua frios");
   drawButtonHint(252, 446, "H", "Hot");
-  drawButtonHint(334, 446, "L", "Lim 6k");
+  drawButtonHint(334, 446, "L", "Lim 3k");
 }
 
 static void drawDynamic() {
@@ -438,7 +454,7 @@ static void drawDynamic() {
     tft.print("PROT: SUPERAQUECIMENTO");
   } else if (limiterOn && rpm >= kRpmLimit) {
     tft.setTextColor(TFT_RED, TFT_BLACK);
-    tft.print("PROT: CORTE RPM 6000");
+    tft.print("PROT: CORTE RPM 3000");
   } else if (coldMode) {
     tft.setTextColor(TFT_CYAN, TFT_BLACK);
     tft.print("Modo frio ativo");
@@ -546,7 +562,7 @@ static void engineProcess(unsigned long dtMs) {
   bool limiterCut = false;
   if (limiterOn && fRpm >= (float)kRpmLimit) {
     limiterCut = true;
-    targetRpm = (float)kRpmLimit - 280.0f;
+    targetRpm = (float)kRpmLimit - 150.0f;
   }
 
   fRpm = moveTowardsF(fRpm, targetRpm, kRpmRate, dtS);
@@ -622,7 +638,7 @@ void setup() {
   lastDrawMs = lastLoopMs;
   lastSerialMs = lastLoopMs;
 
-  Serial.println("[demo] botoes: P=power  A=segurar acelera  C=cold  H=hot  L=limit 6k");
+  Serial.println("[demo] botoes: P=power  A=segurar acelera  C=cold  H=hot  L=limit 3k");
   Serial.println("[demo] fisica 20 ms, gauge estatico + agulha");
 }
 
