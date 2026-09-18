@@ -8,7 +8,7 @@
   Controles:
   - Botoes fisicos (ativo em LOW, pull-up interno):
       GPIO 4  = POWER    (liga/desliga motor)
-      GPIO 33 = ACCEL    (toggle: pisa / solta o pedal)
+      GPIO 33 = ACCEL    (segurar = sobe TPS; soltar = desce TPS)
       GPIO 14 = COLD     (ar e arrefecimento frios)
       GPIO 15 = HOT      (superaquecimento)
       GPIO 2  = LIMIT    (liga/desliga limitador de RPM)
@@ -21,6 +21,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #ifndef PI
 #define PI 3.14159265f
@@ -82,9 +83,11 @@ static const int kBtnLimitPin = 2;
 
 // ---------- Constantes de simulacao ----------
 static const uint32_t kIdleRpm = 900;
-static const uint32_t kMaxRpm = 6500;
+static const uint32_t kMaxRpm = 6000;
 static const uint32_t kRpmLimit = 6000;
 static const uint32_t kRpmRedFrom = 5000;
+static const float kIdleTps = 8.0f;
+static const float kFullTps = 100.0f;
 static const int16_t kCltLimitC = 105;
 static const uint16_t kNormalCltC = 88;
 static const uint16_t kAmbientCltC = 18;
@@ -100,8 +103,8 @@ static const unsigned long kMaxElapsedMs = 40; // nunca simula mais que 40 ms po
 static const uint8_t kMaxSimSteps = 2;
 
 // Taxas (unidades por segundo) — como um carro, nao um interruptor.
-static const float kTpsRate = 40.0f;     // 8% -> 85% em ~1.9 s
-static const float kRpmRate = 520.0f;    // lenta -> fundo em ~10 s
+static const float kTpsRate = 92.0f;     // 8% -> 100% em ~1.0 s
+static const float kRpmRate = 680.0f;    // lenta -> 6000 em ~7.5 s
 static const float kMapRate = 18.0f;     // MAP atrasado em relacao ao TPS
 static const float kIatRate = 4.0f;
 static const float kCltRate = 6.0f;
@@ -111,7 +114,7 @@ static const float kRpmOffRate = 400.0f;
 // ---------- Estado do motor (fisica em float, display em inteiro) ----------
 static EcuDisplay tft;
 static bool engineOn = false;
-static bool accelMode = false;
+static bool accelHeld = false;  // true enquanto o botao fisico ACCEL estiver pressionado
 static bool coldMode = false;
 static bool hotMode = false;
 static bool limiterOn = false;
@@ -124,6 +127,7 @@ static float fIat = (float)kAmbientIatC;
 static float fLambda = 100.0f;
 static float fFuelPw = 0.0f;
 static float engineTempTimer = 0.0f;
+static float idlePhase = 0.0f;
 
 static uint32_t rpm = 0;
 static uint8_t tps = 0;
@@ -211,7 +215,7 @@ static void rpmToNeedleTip(uint32_t rpmVal, int *x, int *y) {
 }
 
 static void drawGaugeFace() {
-  const int thick = 12;
+  const int thick = 4; // cerca de 1/3 da espessura anterior
   const float redFrac = (float)kRpmRedFrom / (float)kMaxRpm;
   const float redStart = 135.0f + redFrac * 270.0f;
   drawArc(gCx, gCy, gR, thick, 135.0f, redStart, TFT_DARKGREEN);
@@ -219,9 +223,8 @@ static void drawGaugeFace() {
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(1);
-  tft.setTextDatum(middle_center);
-  tft.drawString("RPM", gCx, gCy - 16);
-  tft.setTextDatum(top_left);
+  tft.setCursor(gCx + gR + 10, gCy - 18);
+  tft.print("RPM");
 }
 
 static void drawNeedle() {
@@ -236,18 +239,18 @@ static void drawNeedle() {
   const uint16_t col = colorForRpm(rpm);
   tft.drawLine(gCx, gCy, x, y, col);
   tft.drawLine(gCx + 1, gCy, x + 1, y, col);
-  tft.fillCircle(gCx, gCy, 4, TFT_WHITE);
+  tft.fillCircle(gCx, gCy, 3, TFT_WHITE);
 
   lastNeedleX = x;
   lastNeedleY = y;
 
+  // Numero fora da roda, a direita, para nao cobrir a agulha.
   if (rpm != lastDrawnRpm) {
-    tft.fillRect(gCx - 40, gCy + 6, 80, 22, TFT_BLACK);
-    tft.setTextDatum(middle_center);
-    tft.setTextSize(2);
+    tft.fillRect(gCx + gR + 8, gCy - 4, 72, 22, TFT_BLACK);
     tft.setTextColor(col, TFT_BLACK);
-    tft.drawNumber((long)rpm, gCx, gCy + 16);
-    tft.setTextDatum(top_left);
+    tft.setTextSize(2);
+    tft.setCursor(gCx + gR + 10, gCy);
+    tft.print(rpm);
     lastDrawnRpm = rpm;
   }
 }
@@ -356,7 +359,7 @@ static void drawDynamic() {
                fuelPwX100 / 100, fuelPwX100 % 100);
 
   drawStatusBox(12, 340, "POWER", engineOn, engineOn ? TFT_GREEN : TFT_RED);
-  drawStatusBox(114, 340, "ACCEL", accelMode && engineOn, TFT_YELLOW);
+  drawStatusBox(114, 340, "ACCEL", accelHeld && engineOn, TFT_YELLOW);
   drawStatusBox(216, 340, "HOT", hotMode, TFT_RED);
   drawStatusBox(318 - 90, 340, "LIMIT", limiterOn && engineOn, TFT_ORANGE);
 
@@ -380,7 +383,7 @@ static void drawDynamic() {
   } else if (coldMode) {
     tft.setTextColor(TFT_CYAN, TFT_BLACK);
     tft.print("Modo frio ativo");
-  } else if (accelMode) {
+  } else if (accelHeld) {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.print("Acelerando");
   } else {
@@ -404,8 +407,10 @@ static void engineProcess(unsigned long dtMs) {
   }
 
   engineTempTimer += dtS;
+  idlePhase += dtS * 2.2f;
 
-  const float targetTps = accelMode ? 85.0f : 8.0f;
+  // Pedal: segurar sobe TPS, soltar volta para a lenta.
+  const float targetTps = accelHeld ? kFullTps : kIdleTps;
   fTps = moveTowardsF(fTps, targetTps, kTpsRate, dtS);
 
   float targetIat;
@@ -446,7 +451,18 @@ static void engineProcess(unsigned long dtMs) {
   }
   fLambda = moveTowardsF(fLambda, targetLam, kLambdaRate, dtS);
 
-  float targetRpm = (float)kIdleRpm + (fTps * (float)(kMaxRpm - kIdleRpm)) / 100.0f;
+  // TPS manda no RPM: 8% = lenta, 100% = 6000.
+  float tpsSpan = kFullTps - kIdleTps;
+  float tpsNorm = (fTps - kIdleTps) / tpsSpan;
+  if (tpsNorm < 0.0f) tpsNorm = 0.0f;
+  if (tpsNorm > 1.0f) tpsNorm = 1.0f;
+  float targetRpm = (float)kIdleRpm + tpsNorm * (float)(kMaxRpm - kIdleRpm);
+
+  // Variacao da marcha lenta (motor "vivo").
+  if (!accelHeld && fTps <= (kIdleTps + 2.0f) && fClt < (float)kCltLimitC) {
+    targetRpm += 40.0f * sinf(idlePhase);
+  }
+
   if (engineTempTimer < 1.6f) {
     const float crankRpm = 200.0f;
     const float catchRpm = crankRpm + ((float)kIdleRpm - crankRpm) * (engineTempTimer / 1.6f);
@@ -454,22 +470,34 @@ static void engineProcess(unsigned long dtMs) {
       targetRpm = catchRpm;
     }
   }
-  if (limiterOn && targetRpm > (float)kRpmLimit) {
-    targetRpm = (float)kRpmLimit;
+
+  // Teto mecanico: nunca passa de 6000.
+  if (targetRpm > (float)kMaxRpm) {
+    targetRpm = (float)kMaxRpm;
   }
+
   if (fClt >= (float)kCltLimitC) {
     targetRpm = (float)kIdleRpm * 0.5f;
   }
+
+  // Limitador armado: ao bater 6000 corta combustivel e o RPM cai um pouco,
+  // depois sobe de novo (oscilacao visivel).
+  bool limiterCut = false;
+  if (limiterOn && fRpm >= (float)kRpmLimit) {
+    limiterCut = true;
+    targetRpm = (float)kRpmLimit - 280.0f;
+  }
+
   fRpm = moveTowardsF(fRpm, targetRpm, kRpmRate, dtS);
 
-  const bool cutFuel = (fClt >= (float)kCltLimitC) || (limiterOn && fRpm >= (float)kRpmLimit);
+  const bool cutFuel = (fClt >= (float)kCltLimitC) || limiterCut;
   float basePw = 800.0f + (fMap - 30.0f) * 10.0f + (fRpm * 25.0f) / 1000.0f;
   if (fClt < 20.0f) {
     basePw *= 1.40f;
   } else if (fClt < 80.0f) {
     basePw *= (100.0f + (80.0f - fClt) / 2.0f) / 100.0f;
   }
-  if (accelMode && fTps > 20.0f) {
+  if (accelHeld && fTps > 20.0f) {
     basePw *= 1.18f;
   }
   fFuelPw = cutFuel ? 0.0f : basePw;
@@ -490,13 +518,9 @@ static void readButtons() {
 
   if (pressed[0] && !wasPressed[0]) {
     engineOn = !engineOn;
-    if (!engineOn) {
-      accelMode = false;
-    }
   }
-  if (pressed[1] && !wasPressed[1]) {
-    accelMode = !accelMode;
-  }
+  // ACCEL: enquanto segura, acelera; ao soltar, o TPS volta sozinho.
+  accelHeld = pressed[1];
   if (pressed[2] && !wasPressed[2]) coldMode = !coldMode;
   if (pressed[3] && !wasPressed[3]) hotMode = !hotMode;
   if (pressed[4] && !wasPressed[4]) limiterOn = !limiterOn;
@@ -537,7 +561,7 @@ void setup() {
   lastDrawMs = lastLoopMs;
   lastSerialMs = lastLoopMs;
 
-  Serial.println("[demo] botoes: P=power A=accel(toggle) C=cold H=hot L=limit");
+  Serial.println("[demo] botoes: P=power  A=segurar acelera  C=cold  H=hot  L=limit 6k");
   Serial.println("[demo] fisica 20 ms, gauge estatico + agulha");
 }
 
@@ -569,6 +593,6 @@ void loop() {
     Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d iat=%d pw=%u.%02u acc=%u lim=%u cold=%u hot=%u\n",
                   engineOn, rpm, tps, mapKpa, cltC, iatC,
                   fuelPwX100 / 100, fuelPwX100 % 100,
-                  accelMode, limiterOn, coldMode, hotMode);
+                  accelHeld, limiterOn, coldMode, hotMode);
   }
 }
