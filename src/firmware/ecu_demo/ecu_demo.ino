@@ -129,7 +129,7 @@ static int clamp(int v, int lo, int hi) {
 static uint16_t colorForRpm(uint32_t value) {
   if (value < 2000) return TFT_GREEN;
   if (value < 4000) return TFT_YELLOW;
-  if (value < kRpmRedZone) return TFT_ORANGE;
+  if (value < 5000) return TFT_ORANGE;
   return TFT_RED;
 }
 
