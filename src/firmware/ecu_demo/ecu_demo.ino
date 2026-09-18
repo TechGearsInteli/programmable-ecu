@@ -557,7 +557,7 @@ static void engineProcess(unsigned long dtMs) {
     targetRpm = (float)kIdleRpm * 0.5f;
   }
 
-  // Limitador armado: ao bater 6000 corta combustivel e o RPM cai um pouco,
+  // Limitador armado: ao bater 3000 corta combustivel e o RPM cai um pouco,
   // depois sobe de novo (oscilacao visivel).
   bool limiterCut = false;
   if (limiterOn && fRpm >= (float)kRpmLimit) {
