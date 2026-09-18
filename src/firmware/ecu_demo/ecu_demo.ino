@@ -9,11 +9,14 @@
   - Botoes fisicos (ativo em LOW, pull-up interno):
       GPIO 4  = POWER    (liga/desliga motor)
       GPIO 33 = ACCEL    (acelera / solta acelerador)
-      GPIO 14 = COLD     (partida no frio)
+      GPIO 14 = COLD     (ar e arrefecimento frios)
       GPIO 15 = HOT      (superaquecimento)
       GPIO 2  = LIMIT    (liga/desliga limitador de RPM)
   - Touch: areas na tela espelham os botoes (se o shield tiver touch
     calibrado; senao, use os botoes fisicos).
+
+  Portas livres para mais botoes/sensores no ESP32 com esta tela:
+    GPIO 5, 34, 35, 36, 39  (34-39 sao input-only).
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
 */
@@ -84,12 +87,17 @@ static const int kBtnLimitPin = 2;
 
 // ---------- Constantes de simulacao ----------
 static const uint32_t kIdleRpm = 900;
-static const uint32_t kMaxRpm = 6000;
-static const uint32_t kRpmLimit = 3000;
+static const uint32_t kMaxRpm = 6500;     // fundo de escala do gauge
+static const uint32_t kRpmLimit = 6000;   // corte de seguranca
+static const uint32_t kRpmRedZone = 5000; // inicio da faixa vermelha no gauge
 static const int16_t kCltLimitC = 105;
 static const uint16_t kNormalCltC = 88;
-static const uint16_t kColdCltC = 18;
+static const uint16_t kAmbientCltC = 18;
+static const uint16_t kAmbientIatC = 22;
+static const uint16_t kColdCltC = 10;
+static const uint16_t kColdIatC = 8;
 static const uint16_t kHotCltC = 110;
+static const uint16_t kHotIatC = 55;
 
 // ---------- Estado do motor ----------
 static EcuDisplay tft;
@@ -102,10 +110,11 @@ static bool limiterOn = false;
 static uint32_t rpm = 0;
 static uint8_t tps = 0;
 static uint16_t mapKpa = 35;
-static int16_t cltC = kColdCltC;
-static int16_t iatC = 24;
+static int16_t cltC = kAmbientCltC;
+static int16_t iatC = kAmbientIatC;
 static uint16_t lambdaX100 = 100;
 static uint16_t fuelPwX100 = 0;
+static float engineTempTimer = 0.0f; // segundos desde ligou
 
 static unsigned long lastEngineMs = 0;
 static unsigned long lastDrawMs = 0;
@@ -119,7 +128,7 @@ static int clamp(int v, int lo, int hi) {
 static uint16_t colorForRpm(uint32_t value) {
   if (value < 2000) return TFT_GREEN;
   if (value < 4000) return TFT_YELLOW;
-  if (value < kRpmLimit) return TFT_ORANGE;
+  if (value < kRpmRedZone) return TFT_ORANGE;
   return TFT_RED;
 }
 
@@ -153,13 +162,24 @@ static void drawGaugeRPM(int cx, int cy, int r) {
   const int thick = 12;
   // Fundo cinza do arco (sobrescreve frame anterior)
   drawArc(cx, cy, r, thick, 135.0f, 405.0f, TFT_DARKGREY);
+
+  // Faixa vermelha de perigo (5000 a 6000 rpm)
+  const float redStartFrac = clamp((int)kRpmRedZone, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float redEndFrac   = clamp((int)kRpmLimit, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float redStartAngle = 135.0f + redStartFrac * 270.0f;
+  const float redEndAngle   = 135.0f + redEndFrac * 270.0f;
+  drawArc(cx, cy, r, thick + 2, redStartAngle, redEndAngle, TFT_RED);
+
   // Parte preenchida
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
   const float endAngle = 135.0f + frac * 270.0f;
   const uint16_t color = colorForRpm(rpm);
   drawArc(cx, cy, r, thick, 135.0f, endAngle, color);
 
-  // Texto central — background preto apaga o numero antigo
+  // Apaga por completo o centro antes de desenhar texto (evita sobreposicao)
+  tft.fillRect(cx - 42, cy - 32, 84, 58, TFT_BLACK);
+
+  // Texto central
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(1);
   tft.setTextDatum(middle_center);
@@ -251,9 +271,9 @@ static void drawStatic() {
   // Legendas de botoes
   drawButtonHint(12, 446, "P", "Ligar");
   drawButtonHint(90, 446, "A", "Acelerar");
-  drawButtonHint(180, 446, "C", "Frio");
+  drawButtonHint(180, 446, "C", "Ar/Agua frios");
   drawButtonHint(252, 446, "H", "Hot");
-  drawButtonHint(334, 446, "L", "Lim");
+  drawButtonHint(334, 446, "L", "Lim 6k");
 }
 
 // Desenha apenas elementos que mudam a cada frame. Chamado no loop.
@@ -281,76 +301,124 @@ static void drawDynamic() {
   tft.fillRect(96 + 1, 388 + 1, fuelW - 2, 20 - 2, TFT_DARKGREY);
   tft.fillRect(96 + 1, 388 + 1, fuelFill, 20 - 2, fuelPwX100 > 0 ? TFT_BLUE : TFT_DARKGREY);
 
-  // Aviso de protecao — limpa a linha antes
+  // Aviso de protecao / estado — limpa a linha antes
   tft.fillRect(12, 420, 300, 22, TFT_BLACK);
-  if (engineOn && ((limiterOn && rpm >= kRpmLimit) || cltC >= kCltLimitC)) {
+  tft.setTextSize(2);
+  tft.setCursor(12, 420);
+  if (!engineOn) {
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.print("Motor desligado");
+  } else if (cltC >= kCltLimitC) {
     tft.setTextColor(TFT_RED, TFT_BLACK);
-    tft.setTextSize(2);
-    tft.setCursor(12, 420);
-    if (cltC >= kCltLimitC) {
-      tft.print("PROT: SUPERAQUECIMENTO");
-    } else {
-      tft.print("PROT: LIMITADOR RPM");
-    }
+    tft.print("PROT: SUPERAQUECIMENTO");
+  } else if (limiterOn && rpm >= kRpmLimit) {
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.print("PROT: CORTE RPM 6000");
+  } else if (coldMode) {
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.print("Modo frio ativo");
+  } else if (hotMode) {
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.print("Modo quente ativo");
   } else {
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    tft.setCursor(12, 420);
     tft.print("Sistema normal");
   }
+}
+
+// Aproxima value em direction com taxa rate por segundo (dtMs em ms).
+static int32_t moveTowards(int32_t value, int32_t target, float ratePerSecond, unsigned long dtMs) {
+  if (ratePerSecond <= 0) return target;
+  const int32_t delta = (int32_t)(ratePerSecond * dtMs / 1000.0f);
+  if (delta == 0) {
+    return value < target ? value + 1 : (value > target ? value - 1 : value);
+  }
+  if (value < target) return (value + delta > target) ? target : value + delta;
+  if (value > target) return (value - delta < target) ? target : value - delta;
+  return value;
 }
 
 // ---------- Processamento do motor (foco principal) ----------
 static void engineProcess(unsigned long dtMs) {
   if (!engineOn) {
-    rpm = 0;
-    tps = 0;
-    mapKpa = 35;
+    // Desligamento gradual
+    rpm = (uint32_t)moveTowards((int32_t)rpm, 0, 2000.0f, dtMs);
+    tps = (uint8_t)moveTowards((int32_t)tps, 0, 400.0f, dtMs);
+    mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, 35, 80.0f, dtMs);
     fuelPwX100 = 0;
     lambdaX100 = 100;
+    engineTempTimer = 0.0f;
     return;
   }
 
-  // TPS: 0 no comeco, acelera se botao pressionado
-  const uint8_t targetTps = btnAccelHeld ? (uint8_t)80 : (uint8_t)8;
-  if (tps < targetTps) tps = (uint8_t)(tps + 2);
-  if (tps > targetTps) tps = (uint8_t)(tps - 2);
+  engineTempTimer += dtMs / 1000.0f;
 
-  // CLT: varia lentamente conforme modo
-  const int16_t targetClt = hotMode ? kHotCltC : (coldMode ? kColdCltC : kNormalCltC);
-  if (cltC < targetClt) cltC++;
-  if (cltC > targetClt) cltC--;
+  // TPS: acelera e solta devagar (pedal eletronico)
+  const uint8_t targetTps = btnAccelHeld ? (uint8_t)85 : (uint8_t)8;
+  tps = (uint8_t)moveTowards((int32_t)tps, targetTps, 250.0f, dtMs);
 
-  // MAP: segue TPS de forma simples
-  mapKpa = (uint16_t)(32 + (tps * 66) / 100);
+  // IAT: segue ambiente + influencia leve de carga
+  int16_t targetIat;
+  if (coldMode) {
+    targetIat = kColdIatC;
+  } else if (hotMode) {
+    targetIat = kHotIatC;
+  } else {
+    targetIat = (int16_t)(kAmbientIatC + tps / 12);
+  }
+  iatC = (int16_t)moveTowards((int32_t)iatC, targetIat, 8.0f, dtMs);
 
-  // IAT: levemente influenciado por TPS
-  iatC = (int16_t)(24 + tps / 20);
+  // CLT: aquece com o tempo desde ligado, a menos que modo frio/quente force
+  int16_t targetClt;
+  if (coldMode) {
+    targetClt = kColdCltC;
+  } else if (hotMode) {
+    targetClt = kHotCltC;
+  } else {
+    // Aquece de ambiente ate normal em ~90 s
+    const float tempFactor = engineTempTimer / 90.0f;
+    if (tempFactor >= 1.0f) {
+      targetClt = kNormalCltC;
+    } else {
+      targetClt = (int16_t)(kAmbientCltC + (kNormalCltC - kAmbientCltC) * tempFactor);
+    }
+  }
+  cltC = (int16_t)moveTowards((int32_t)cltC, targetClt, 2.5f, dtMs);
+
+  // MAP: segue TPS com um pequeno atraso (corpo de borboleta + admissao)
+  const uint16_t targetMap = (uint16_t)(32 + (tps * 68) / 100);
+  mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, targetMap, 120.0f, dtMs);
 
   // Lambda: rico na aceleracao, pobre na solta, estavel no marcha-lenta
-  if (tps > 30) {
+  if (tps > 35) {
     lambdaX100 = 85;
-  } else if (tps < 8) {
+  } else if (tps < 10) {
     lambdaX100 = 104;
   } else {
     lambdaX100 = 100;
   }
 
-  // RPM: sobe com TPS, limitado
+  // RPM: tem inercia e depende do TPS
   uint32_t targetRpm = kIdleRpm + (tps * (kMaxRpm - kIdleRpm)) / 100;
+  // Partida: quando acabou de ligar, nao salta direto para marcha-lenta
+  if (engineTempTimer < 1.2f) {
+    const uint32_t crankRpm = 280;
+    const uint32_t catchRpm = (uint32_t)(crankRpm + (kIdleRpm - crankRpm) * (engineTempTimer / 1.2f));
+    targetRpm = (targetRpm < catchRpm) ? targetRpm : catchRpm;
+  }
+  // Limitador de seguranca em 6000 rpm
   if (limiterOn && targetRpm > kRpmLimit) {
     targetRpm = kRpmLimit;
   }
-  const uint32_t rpmStep = 50;
-  if (rpm < targetRpm) rpm = (rpm + rpmStep > targetRpm) ? targetRpm : rpm + rpmStep;
-  if (rpm > targetRpm) rpm = (rpm < rpmStep + targetRpm) ? targetRpm : rpm - rpmStep;
+  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 450.0f, dtMs);
 
-  // Protecao: se superaquecer ou limitar, zera combustivel
+  // Protecao: se superaquecer ou limitador ativo, zera combustivel
   bool cutFuel = (cltC >= kCltLimitC) || (limiterOn && rpm >= kRpmLimit);
 
   // Calculo de PW (simplificado, nao usa mapa real neste demo)
   // Base ~ 8ms no lenta, sobe com carga
   uint16_t basePw = (uint16_t)(800 + (mapKpa - 30) * 10 + (rpm * 25) / 1000);
-  // Correcao CLT: +40% frio
+  // Correcao CLT: +40% muito frio; intermediario ate 80C
   if (cltC < 20) basePw = (uint16_t)(basePw * 140 / 100);
   else if (cltC < 80) basePw = (uint16_t)(basePw * (100 + (80 - cltC) / 2) / 100);
   // Correcao aceleracao: +18%
@@ -463,9 +531,9 @@ void loop() {
 
   if (now - lastSerialMs >= 1000) {
     lastSerialMs = now;
-    Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d pw=%u.%02u lim=%u hot=%u\n",
-                  engineOn, rpm, tps, mapKpa, cltC,
+    Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d iat=%d pw=%u.%02u lim=%u cold=%u hot=%u\n",
+                  engineOn, rpm, tps, mapKpa, cltC, iatC,
                   fuelPwX100 / 100, fuelPwX100 % 100,
-                  limiterOn, hotMode);
+                  limiterOn, coldMode, hotMode);
   }
 }
