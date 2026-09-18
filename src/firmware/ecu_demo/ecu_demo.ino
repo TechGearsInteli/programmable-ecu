@@ -8,15 +8,10 @@
   Controles:
   - Botoes fisicos (ativo em LOW, pull-up interno):
       GPIO 4  = POWER    (liga/desliga motor)
-      GPIO 33 = ACCEL    (acelera / solta acelerador)
+      GPIO 33 = ACCEL    (toggle: pisa / solta o pedal)
       GPIO 14 = COLD     (ar e arrefecimento frios)
       GPIO 15 = HOT      (superaquecimento)
       GPIO 2  = LIMIT    (liga/desliga limitador de RPM)
-  - Touch: areas na tela espelham os botoes (se o shield tiver touch
-    calibrado; senao, use os botoes fisicos).
-
-  Portas livres para mais botoes/sensores no ESP32 com esta tela:
-    GPIO 5, 34, 35, 36, 39  (34-39 sao input-only).
 
   Arduino IDE 2: LovyanGFX, ESP32 Dev Module, COM do CP2102, 115200.
 */
@@ -79,8 +74,6 @@ public:
 };
 
 // ---------- Pinos dos botoes fisicos ----------
-// Reutilizam pinos que no sketch principal sao CKP/injetores.
-// Todos suportam pull-up interno (diferente dos GPIOs 34-39).
 static const int kBtnPowerPin = 4;
 static const int kBtnAccelPin = 33;
 static const int kBtnColdPin = 14;
@@ -89,8 +82,9 @@ static const int kBtnLimitPin = 2;
 
 // ---------- Constantes de simulacao ----------
 static const uint32_t kIdleRpm = 900;
-static const uint32_t kMaxRpm = 6500;     // fundo de escala do gauge
-static const uint32_t kRpmLimit = 6000;   // corte de seguranca
+static const uint32_t kMaxRpm = 6500;
+static const uint32_t kRpmLimit = 6000;
+static const uint32_t kRpmRedFrom = 5000;
 static const int16_t kCltLimitC = 105;
 static const uint16_t kNormalCltC = 88;
 static const uint16_t kAmbientCltC = 18;
@@ -100,13 +94,36 @@ static const uint16_t kColdIatC = 8;
 static const uint16_t kHotCltC = 110;
 static const uint16_t kHotIatC = 55;
 
-// ---------- Estado do motor ----------
+// Passo fixo da fisica. Independente de quanto o TFT demora para desenhar.
+static const unsigned long kSimDtMs = 20;
+static const unsigned long kMaxElapsedMs = 40; // nunca simula mais que 40 ms por volta do loop
+static const uint8_t kMaxSimSteps = 2;
+
+// Taxas (unidades por segundo) — como um carro, nao um interruptor.
+static const float kTpsRate = 40.0f;     // 8% -> 85% em ~1.9 s
+static const float kRpmRate = 520.0f;    // lenta -> fundo em ~10 s
+static const float kMapRate = 18.0f;     // MAP atrasado em relacao ao TPS
+static const float kIatRate = 4.0f;
+static const float kCltRate = 6.0f;
+static const float kLambdaRate = 12.0f;
+static const float kRpmOffRate = 400.0f;
+
+// ---------- Estado do motor (fisica em float, display em inteiro) ----------
 static EcuDisplay tft;
 static bool engineOn = false;
-static bool accelMode = false;  // toggle: true = pedal acionado
+static bool accelMode = false;
 static bool coldMode = false;
 static bool hotMode = false;
 static bool limiterOn = false;
+
+static float fRpm = 0.0f;
+static float fTps = 0.0f;
+static float fMap = 35.0f;
+static float fClt = (float)kAmbientCltC;
+static float fIat = (float)kAmbientIatC;
+static float fLambda = 100.0f;
+static float fFuelPw = 0.0f;
+static float engineTempTimer = 0.0f;
 
 static uint32_t rpm = 0;
 static uint8_t tps = 0;
@@ -115,20 +132,27 @@ static int16_t cltC = kAmbientCltC;
 static int16_t iatC = kAmbientIatC;
 static uint16_t lambdaX100 = 100;
 static uint16_t fuelPwX100 = 0;
-static float engineTempTimer = 0.0f; // segundos desde ligou
 
-static unsigned long lastEngineMs = 0;
+static unsigned long lastLoopMs = 0;
+static unsigned long simAccMs = 0;
 static unsigned long lastDrawMs = 0;
 static unsigned long lastSerialMs = 0;
 
-// ---------- Utilitarios de desenho ----------
+// Gauge estatico
+static int gCx = 240;
+static int gCy = 100;
+static int gR = 56;
+static int lastNeedleX = -1;
+static int lastNeedleY = -1;
+static uint32_t lastDrawnRpm = 0xFFFFFFFF;
+
+// ---------- Utilitarios ----------
 static int clamp(int v, int lo, int hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
 static uint16_t colorForRpm(uint32_t value) {
-  if (value < 5000) return TFT_GREEN;
-  return TFT_RED;
+  return (value >= kRpmRedFrom) ? TFT_RED : TFT_GREEN;
 }
 
 static uint16_t colorForClt(int16_t value) {
@@ -138,7 +162,28 @@ static uint16_t colorForClt(int16_t value) {
   return TFT_RED;
 }
 
-// Desenha um arco de gauge entre startAngle e endAngle (em graus, 0 = topo).
+static float moveTowardsF(float value, float target, float ratePerSecond, float dtS) {
+  const float step = ratePerSecond * dtS;
+  if (value < target) {
+    return (value + step > target) ? target : value + step;
+  }
+  if (value > target) {
+    return (value - step < target) ? target : value - step;
+  }
+  return value;
+}
+
+static void publishDisplayVars() {
+  rpm = (uint32_t)(fRpm + 0.5f);
+  tps = (uint8_t)clamp((int)(fTps + 0.5f), 0, 100);
+  mapKpa = (uint16_t)clamp((int)(fMap + 0.5f), 0, 200);
+  cltC = (int16_t)(fClt + (fClt >= 0 ? 0.5f : -0.5f));
+  iatC = (int16_t)(fIat + (fIat >= 0 ? 0.5f : -0.5f));
+  lambdaX100 = (uint16_t)(fLambda + 0.5f);
+  fuelPwX100 = (uint16_t)clamp((int)(fFuelPw + 0.5f), 0, 4000);
+}
+
+// Desenha um arco de gauge entre startAngle e endAngle (0 = topo). So no setup.
 static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endDeg, uint16_t color) {
   const float step = 3.0f;
   for (float a = startDeg; a <= endDeg; a += step) {
@@ -157,35 +202,54 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
   }
 }
 
-static void drawGaugeRPM(int cx, int cy, int r) {
+static void rpmToNeedleTip(uint32_t rpmVal, int *x, int *y) {
+  const float frac = clamp((int)rpmVal, 0, (int)kMaxRpm) / (float)kMaxRpm;
+  const float ang = (135.0f + frac * 270.0f - 90.0f) * PI / 180.0f;
+  const int tipR = gR - 16;
+  *x = gCx + (int)(tipR * cosf(ang));
+  *y = gCy + (int)(tipR * sinf(ang));
+}
+
+static void drawGaugeFace() {
   const int thick = 12;
+  const float redFrac = (float)kRpmRedFrom / (float)kMaxRpm;
+  const float redStart = 135.0f + redFrac * 270.0f;
+  drawArc(gCx, gCy, gR, thick, 135.0f, redStart, TFT_DARKGREEN);
+  drawArc(gCx, gCy, gR, thick, redStart, 405.0f, TFT_RED);
 
-  // Angulo de inicio da zona vermelha (5000 rpm)
-  const float redStartFrac = clamp(5000, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float redStartAngle = 135.0f + redStartFrac * 270.0f;
-
-  // Fundo do arco: verde ate 5000 rpm, vermelho ate o final
-  drawArc(cx, cy, r, thick, 135.0f, redStartAngle, TFT_DARKGREEN);
-  drawArc(cx, cy, r, thick, redStartAngle, 405.0f, TFT_RED);
-
-  // Parte preenchida por cima
-  const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
-  const float endAngle = 135.0f + frac * 270.0f;
-  const uint16_t color = colorForRpm(rpm);
-  drawArc(cx, cy, r, thick, 135.0f, endAngle, color);
-
-  // Apaga o centro sem tocar o arco (raio interno = r - thick/2)
-  tft.fillCircle(cx, cy, r - thick / 2 - 2, TFT_BLACK);
-
-  // Texto central
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(1);
   tft.setTextDatum(middle_center);
-  tft.drawString("RPM", cx, cy - 18);
-  tft.setTextSize(3);
-  tft.setTextColor(color, TFT_BLACK);
-  tft.drawNumber(rpm, cx, cy + 8);
+  tft.drawString("RPM", gCx, gCy - 16);
   tft.setTextDatum(top_left);
+}
+
+static void drawNeedle() {
+  int x, y;
+  rpmToNeedleTip(rpm, &x, &y);
+
+  if (lastNeedleX >= 0) {
+    tft.drawLine(gCx, gCy, lastNeedleX, lastNeedleY, TFT_BLACK);
+    tft.drawLine(gCx + 1, gCy, lastNeedleX + 1, lastNeedleY, TFT_BLACK);
+  }
+
+  const uint16_t col = colorForRpm(rpm);
+  tft.drawLine(gCx, gCy, x, y, col);
+  tft.drawLine(gCx + 1, gCy, x + 1, y, col);
+  tft.fillCircle(gCx, gCy, 4, TFT_WHITE);
+
+  lastNeedleX = x;
+  lastNeedleY = y;
+
+  if (rpm != lastDrawnRpm) {
+    tft.fillRect(gCx - 40, gCy + 6, 80, 22, TFT_BLACK);
+    tft.setTextDatum(middle_center);
+    tft.setTextSize(2);
+    tft.setTextColor(col, TFT_BLACK);
+    tft.drawNumber((long)rpm, gCx, gCy + 16);
+    tft.setTextDatum(top_left);
+    lastDrawnRpm = rpm;
+  }
 }
 
 static void drawBarStatic(const char *label, int x, int y, int w, int h) {
@@ -199,14 +263,12 @@ static void drawBarStatic(const char *label, int x, int y, int w, int h) {
 static void drawBarValue(int x, int y, int w, int h,
                          int value, int minV, int maxV, uint16_t color,
                          const char *fmt, ...) {
-  // Limpa preenchimento anterior
   tft.fillRect(x + 1, y + 1, w - 2, h - 2, TFT_DARKGREY);
   const int filled = clamp((value - minV) * (w - 2) / (maxV - minV), 0, w - 2);
   if (filled > 0) {
     tft.fillRect(x + 1, y + 1, filled, h - 2, color);
   }
 
-  // Valor numerico dentro da barra, alinhado a direita
   char buf[16];
   va_list args;
   va_start(args, fmt);
@@ -214,9 +276,8 @@ static void drawBarValue(int x, int y, int w, int h,
   va_end(args);
 
   const int pad = 4;
-  const int textW = strlen(buf) * 6; // fonte 1 = 6 px por caractere
+  const int textW = (int)strlen(buf) * 6;
   const int textX = x + w - pad - textW;
-  // Apaga uma pequena area atras do texto para legibilidade
   tft.fillRect(textX - 2, y + 2, textW + 4, h - 4, TFT_BLACK);
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(1);
@@ -247,18 +308,20 @@ static void drawButtonHint(int x, int y, const char *key, const char *txt) {
   tft.print(txt);
 }
 
-// Desenha tudo que nao muda (fundos, labels, contornos). Chamado no setup.
 static void drawStatic() {
   tft.fillScreen(TFT_BLACK);
+  gCx = tft.width() / 2;
+  gCy = 100;
+  gR = 56;
 
-  // Cabecalho
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 10);
   tft.print("Programmable ECU  DEMO");
   tft.drawLine(12, 34, tft.width() - 12, 34, TFT_WHITE);
 
-  // Labels e contornos das barras
+  drawGaugeFace();
+
   drawBarStatic("TPS %", 12, 200, 140, 18);
   drawBarStatic("MAP kPa", 168, 200, 140, 18);
   drawBarStatic("CLT C", 12, 250, 140, 18);
@@ -266,17 +329,13 @@ static void drawStatic() {
   drawBarStatic("LAMBDA", 12, 300, 140, 18);
   drawBarStatic("FUEL ms", 168, 300, 140, 18);
 
-  // Label do indicador de injecao
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 388);
   tft.print("Injecao:");
-
-  // Contorno do indicador de injecao
   const int fuelW = tft.width() - 100;
   tft.drawRect(96, 388, fuelW, 20, TFT_WHITE);
 
-  // Legendas de botoes
   drawButtonHint(12, 446, "P", "Ligar");
   drawButtonHint(90, 446, "A", "Acelerar");
   drawButtonHint(180, 446, "C", "Ar/Agua frios");
@@ -284,32 +343,28 @@ static void drawStatic() {
   drawButtonHint(334, 446, "L", "Lim 6k");
 }
 
-// Desenha apenas elementos que mudam a cada frame. Chamado no loop.
 static void drawDynamic() {
-  // Gauge RPM no centro superior (raio menor para nao cobrir as barras)
-  drawGaugeRPM(tft.width() / 2, 100, 56);
+  drawNeedle();
 
-  // Barras de sensores (valores dentro da barra)
   drawBarValue(12, 200, 140, 18, tps, 0, 100, TFT_GREEN, "%u%%", tps);
   drawBarValue(168, 200, 140, 18, mapKpa, 30, 100, TFT_YELLOW, "%u", mapKpa);
   drawBarValue(12, 250, 140, 18, cltC, 0, 120, colorForClt(cltC), "%d", cltC);
   drawBarValue(168, 250, 140, 18, iatC, 0, 60, TFT_ORANGE, "%d", iatC);
-  drawBarValue(12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN, "%u.%02u", lambdaX100 / 100, lambdaX100 % 100);
-  drawBarValue(168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE, "%u.%02u", fuelPwX100 / 100, fuelPwX100 % 100);
+  drawBarValue(12, 300, 140, 18, lambdaX100, 80, 120, TFT_CYAN, "%u.%02u",
+               lambdaX100 / 100, lambdaX100 % 100);
+  drawBarValue(168, 300, 140, 18, fuelPwX100, 0, 2500, TFT_BLUE, "%u.%02u",
+               fuelPwX100 / 100, fuelPwX100 % 100);
 
-  // Caixas de status
   drawStatusBox(12, 340, "POWER", engineOn, engineOn ? TFT_GREEN : TFT_RED);
-  drawStatusBox(114, 340, "COLD", coldMode, TFT_CYAN);
+  drawStatusBox(114, 340, "ACCEL", accelMode && engineOn, TFT_YELLOW);
   drawStatusBox(216, 340, "HOT", hotMode, TFT_RED);
   drawStatusBox(318 - 90, 340, "LIMIT", limiterOn && engineOn, TFT_ORANGE);
 
-  // Preenchimento do indicador de injecao
   const int fuelW = tft.width() - 100;
   const int fuelFill = clamp((int)fuelPwX100 * (fuelW - 2) / 2500, 0, fuelW - 2);
   tft.fillRect(96 + 1, 388 + 1, fuelW - 2, 20 - 2, TFT_DARKGREY);
   tft.fillRect(96 + 1, 388 + 1, fuelFill, 20 - 2, fuelPwX100 > 0 ? TFT_BLUE : TFT_DARKGREY);
 
-  // Aviso de protecao / estado — limpa a linha antes
   tft.fillRect(12, 420, 300, 22, TFT_BLACK);
   tft.setTextSize(2);
   tft.setCursor(12, 420);
@@ -325,123 +380,103 @@ static void drawDynamic() {
   } else if (coldMode) {
     tft.setTextColor(TFT_CYAN, TFT_BLACK);
     tft.print("Modo frio ativo");
-  } else if (hotMode) {
+  } else if (accelMode) {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.print("Modo quente ativo");
+    tft.print("Acelerando");
   } else {
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.print("Sistema normal");
   }
 }
 
-// Aproxima value em direction com taxa rate por segundo (dtMs em ms).
-static int32_t moveTowards(int32_t value, int32_t target, float ratePerSecond, unsigned long dtMs) {
-  if (ratePerSecond <= 0) return target;
-  const int32_t delta = (int32_t)(ratePerSecond * dtMs / 1000.0f);
-  if (delta == 0) {
-    return value < target ? value + 1 : (value > target ? value - 1 : value);
-  }
-  if (value < target) return (value + delta > target) ? target : value + delta;
-  if (value > target) return (value - delta < target) ? target : value - delta;
-  return value;
-}
-
-// ---------- Processamento do motor (foco principal) ----------
 static void engineProcess(unsigned long dtMs) {
+  const float dtS = dtMs / 1000.0f;
+
   if (!engineOn) {
-    // Desligamento gradual
-    rpm = (uint32_t)moveTowards((int32_t)rpm, 0, 120.0f, dtMs);
-    tps = (uint8_t)moveTowards((int32_t)tps, 0, 60.0f, dtMs);
-    mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, 35, 18.0f, dtMs);
-    fuelPwX100 = 0;
-    lambdaX100 = 100;
+    fRpm = moveTowardsF(fRpm, 0.0f, kRpmOffRate, dtS);
+    fTps = moveTowardsF(fTps, 0.0f, kTpsRate, dtS);
+    fMap = moveTowardsF(fMap, 35.0f, kMapRate, dtS);
+    fFuelPw = 0.0f;
+    fLambda = 100.0f;
     engineTempTimer = 0.0f;
+    publishDisplayVars();
     return;
   }
 
-  engineTempTimer += dtMs / 1000.0f;
+  engineTempTimer += dtS;
 
-  // TPS: acelera e solta devagar (pedal eletronico)
-  const uint8_t targetTps = accelMode ? (uint8_t)85 : (uint8_t)8;
-  tps = (uint8_t)moveTowards((int32_t)tps, targetTps, 45.0f, dtMs);
+  const float targetTps = accelMode ? 85.0f : 8.0f;
+  fTps = moveTowardsF(fTps, targetTps, kTpsRate, dtS);
 
-  // IAT: segue ambiente + influencia leve de carga
-  int16_t targetIat;
+  float targetIat;
   if (coldMode) {
-    targetIat = kColdIatC;
+    targetIat = (float)kColdIatC;
   } else if (hotMode) {
-    targetIat = kHotIatC;
+    targetIat = (float)kHotIatC;
   } else {
-    targetIat = (int16_t)(kAmbientIatC + tps / 12);
+    targetIat = (float)kAmbientIatC + fTps / 12.0f;
   }
-  iatC = (int16_t)moveTowards((int32_t)iatC, targetIat, 5.0f, dtMs);
+  fIat = moveTowardsF(fIat, targetIat, kIatRate, dtS);
 
-  // CLT: aquece com o tempo desde ligado, a menos que modo frio/quente force
-  int16_t targetClt;
+  float targetClt;
   if (coldMode) {
-    targetClt = kColdCltC;
+    targetClt = (float)kColdCltC;
   } else if (hotMode) {
-    targetClt = kHotCltC;
+    targetClt = (float)kHotCltC;
   } else {
-    // Aquece de ambiente ate normal em ~120 s
     const float tempFactor = engineTempTimer / 120.0f;
     if (tempFactor >= 1.0f) {
-      targetClt = kNormalCltC;
+      targetClt = (float)kNormalCltC;
     } else {
-      targetClt = (int16_t)(kAmbientCltC + (kNormalCltC - kAmbientCltC) * tempFactor);
+      targetClt = (float)kAmbientCltC + ((float)kNormalCltC - (float)kAmbientCltC) * tempFactor;
     }
   }
-  cltC = (int16_t)moveTowards((int32_t)cltC, targetClt, 1.2f, dtMs);
+  fClt = moveTowardsF(fClt, targetClt, kCltRate, dtS);
 
-  // MAP: segue TPS com um pequeno atraso (corpo de borboleta + admissao)
-  const uint16_t targetMap = (uint16_t)(32 + (tps * 68) / 100);
-  mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, targetMap, 22.0f, dtMs);
+  const float targetMap = 32.0f + (fTps * 68.0f) / 100.0f;
+  fMap = moveTowardsF(fMap, targetMap, kMapRate, dtS);
 
-  // Lambda: rico na aceleracao, pobre na solta, estavel no marcha-lenta
-  if (tps > 35) {
-    lambdaX100 = 85;
-  } else if (tps < 10) {
-    lambdaX100 = 104;
+  float targetLam;
+  if (fTps > 35.0f) {
+    targetLam = 85.0f;
+  } else if (fTps < 10.0f) {
+    targetLam = 104.0f;
   } else {
-    lambdaX100 = 100;
+    targetLam = 100.0f;
   }
+  fLambda = moveTowardsF(fLambda, targetLam, kLambdaRate, dtS);
 
-  // RPM: tem inercia e depende do TPS
-  uint32_t targetRpm = kIdleRpm + (tps * (kMaxRpm - kIdleRpm)) / 100;
-  // Partida: quando acabou de ligar, nao salta direto para marcha-lenta
+  float targetRpm = (float)kIdleRpm + (fTps * (float)(kMaxRpm - kIdleRpm)) / 100.0f;
   if (engineTempTimer < 1.6f) {
-    const uint32_t crankRpm = 200;
-    const uint32_t catchRpm = (uint32_t)(crankRpm + (kIdleRpm - crankRpm) * (engineTempTimer / 1.6f));
-    targetRpm = (targetRpm < catchRpm) ? targetRpm : catchRpm;
+    const float crankRpm = 200.0f;
+    const float catchRpm = crankRpm + ((float)kIdleRpm - crankRpm) * (engineTempTimer / 1.6f);
+    if (targetRpm > catchRpm) {
+      targetRpm = catchRpm;
+    }
   }
-  // Limitador de seguranca em 6000 rpm
-  if (limiterOn && targetRpm > kRpmLimit) {
-    targetRpm = kRpmLimit;
+  if (limiterOn && targetRpm > (float)kRpmLimit) {
+    targetRpm = (float)kRpmLimit;
   }
-
-  // Protecao: se superaquecer, o motor perde forca e desacelera
-  if (cltC >= kCltLimitC) {
-    targetRpm = kIdleRpm / 2; // cai para ~450 rpm (motor "morrendo")
+  if (fClt >= (float)kCltLimitC) {
+    targetRpm = (float)kIdleRpm * 0.5f;
   }
+  fRpm = moveTowardsF(fRpm, targetRpm, kRpmRate, dtS);
 
-  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 600.0f, dtMs);
+  const bool cutFuel = (fClt >= (float)kCltLimitC) || (limiterOn && fRpm >= (float)kRpmLimit);
+  float basePw = 800.0f + (fMap - 30.0f) * 10.0f + (fRpm * 25.0f) / 1000.0f;
+  if (fClt < 20.0f) {
+    basePw *= 1.40f;
+  } else if (fClt < 80.0f) {
+    basePw *= (100.0f + (80.0f - fClt) / 2.0f) / 100.0f;
+  }
+  if (accelMode && fTps > 20.0f) {
+    basePw *= 1.18f;
+  }
+  fFuelPw = cutFuel ? 0.0f : basePw;
 
-  // Corte de combustivel no superaquecimento ou limitador ativo
-  bool cutFuel = (cltC >= kCltLimitC) || (limiterOn && rpm >= kRpmLimit);
-
-  // Calculo de PW (simplificado, nao usa mapa real neste demo)
-  // Base ~ 8ms no lenta, sobe com carga
-  uint16_t basePw = (uint16_t)(800 + (mapKpa - 30) * 10 + (rpm * 25) / 1000);
-  // Correcao CLT: +40% muito frio; intermediario ate 80C
-  if (cltC < 20) basePw = (uint16_t)(basePw * 140 / 100);
-  else if (cltC < 80) basePw = (uint16_t)(basePw * (100 + (80 - cltC) / 2) / 100);
-  // Correcao aceleracao: +18%
-  if (accelMode && tps > 20) basePw = (uint16_t)(basePw * 118 / 100);
-
-  fuelPwX100 = cutFuel ? 0 : basePw;
+  publishDisplayVars();
 }
 
-// ---------- Leitura de botoes fisicos ----------
 static bool wasPressed[5] = {false, false, false, false, false};
 
 static void readButtons() {
@@ -453,51 +488,20 @@ static void readButtons() {
     digitalRead(kBtnLimitPin) == LOW,
   };
 
-  // POWER: toggle no flanco de descida
   if (pressed[0] && !wasPressed[0]) {
     engineOn = !engineOn;
     if (!engineOn) {
-      rpm = 0;
-      accelMode = false; // solta o acelerador ao desligar
+      accelMode = false;
     }
   }
-  // ACCEL: toggle (aperta uma vez para acelerar, outra para soltar)
   if (pressed[1] && !wasPressed[1]) {
     accelMode = !accelMode;
   }
-  // COLD: toggle
   if (pressed[2] && !wasPressed[2]) coldMode = !coldMode;
-  // HOT: toggle
   if (pressed[3] && !wasPressed[3]) hotMode = !hotMode;
-  // LIMIT: toggle
   if (pressed[4] && !wasPressed[4]) limiterOn = !limiterOn;
 
   for (int i = 0; i < 5; i++) wasPressed[i] = pressed[i];
-}
-
-// ---------- Leitura de touch (opcional) ----------
-static bool wasTouched = false;
-
-static void readTouch() {
-  if (!tft.touch()) {
-    return; // Touch nao configurado para este shield
-  }
-  int tx, ty;
-  if (tft.getTouch(&tx, &ty)) {
-    if (!wasTouched) {
-      // Areas correspondem as legendas de botoes na parte inferior
-      if (ty > 440) {
-        if (tx < 70) engineOn = !engineOn;
-        else if (tx < 160) accelMode = !accelMode;
-        else if (tx < 230) coldMode = !coldMode;
-        else if (tx < 310) hotMode = !hotMode;
-        else limiterOn = !limiterOn;
-      }
-    }
-    wasTouched = true;
-  } else {
-    wasTouched = false;
-  }
 }
 
 void setup() {
@@ -525,29 +529,42 @@ void setup() {
   tft.setCursor(12, tft.height() / 2 + 8);
   tft.print("Demo visual");
 
-  delay(1200);
-  drawStatic(); // desenha elementos estaticos uma unica vez
+  delay(800);
+  drawStatic();
+  drawNeedle();
 
-  Serial.println("[demo] botoes: P=power A=accel C=cold H=hot L=limit");
-  if (!tft.touch()) {
-    Serial.println("[demo] touch nao configurado; usando botoes fisicos");
-  }
+  lastLoopMs = millis();
+  lastDrawMs = lastLoopMs;
+  lastSerialMs = lastLoopMs;
+
+  Serial.println("[demo] botoes: P=power A=accel(toggle) C=cold H=hot L=limit");
+  Serial.println("[demo] fisica 20 ms, gauge estatico + agulha");
 }
 
 void loop() {
   readButtons();
-  readTouch();
 
   const unsigned long now = millis();
-  engineProcess(now - lastEngineMs);
-  lastEngineMs = now;
+  unsigned long elapsed = now - lastLoopMs;
+  lastLoopMs = now;
+  if (elapsed > kMaxElapsedMs) {
+    elapsed = kMaxElapsedMs;
+  }
+  simAccMs += elapsed;
 
-  if (now - lastDrawMs >= 100) {
+  uint8_t steps = 0;
+  while (simAccMs >= kSimDtMs && steps < kMaxSimSteps) {
+    engineProcess(kSimDtMs);
+    simAccMs -= kSimDtMs;
+    steps++;
+  }
+
+  if (now - lastDrawMs >= 50) {
     lastDrawMs = now;
     drawDynamic();
   }
 
-  if (now - lastSerialMs >= 1000) {
+  if (now - lastSerialMs >= 250) {
     lastSerialMs = now;
     Serial.printf("[demo] on=%u rpm=%u tps=%u map=%u clt=%d iat=%d pw=%u.%02u acc=%u lim=%u cold=%u hot=%u\n",
                   engineOn, rpm, tps, mapKpa, cltC, iatC,
