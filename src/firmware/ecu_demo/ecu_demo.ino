@@ -160,24 +160,26 @@ static void drawArc(int cx, int cy, int r, int thick, float startDeg, float endD
 
 static void drawGaugeRPM(int cx, int cy, int r) {
   const int thick = 12;
-  // Fundo cinza do arco (sobrescreve frame anterior)
-  drawArc(cx, cy, r, thick, 135.0f, 405.0f, TFT_DARKGREY);
 
-  // Faixa vermelha de perigo (5000 a 6000 rpm)
+  // Angulos da faixa vermelha (zona de perigo)
   const float redStartFrac = clamp((int)kRpmRedZone, 0, (int)kMaxRpm) / (float)kMaxRpm;
   const float redEndFrac   = clamp((int)kRpmLimit, 0, (int)kMaxRpm) / (float)kMaxRpm;
   const float redStartAngle = 135.0f + redStartFrac * 270.0f;
   const float redEndAngle   = 135.0f + redEndFrac * 270.0f;
-  drawArc(cx, cy, r, thick + 2, redStartAngle, redEndAngle, TFT_RED);
 
-  // Parte preenchida
+  // Fundo do arco: cinza, com zona vermelha marcada
+  drawArc(cx, cy, r, thick, 135.0f, redStartAngle, TFT_DARKGREY);
+  drawArc(cx, cy, r, thick, redStartAngle, redEndAngle, TFT_RED);
+  drawArc(cx, cy, r, thick, redEndAngle, 405.0f, TFT_DARKGREY);
+
+  // Parte preenchida por cima
   const float frac = clamp((int)rpm, 0, (int)kMaxRpm) / (float)kMaxRpm;
   const float endAngle = 135.0f + frac * 270.0f;
   const uint16_t color = colorForRpm(rpm);
   drawArc(cx, cy, r, thick, 135.0f, endAngle, color);
 
-  // Apaga por completo o centro antes de desenhar texto (evita sobreposicao)
-  tft.fillRect(cx - 42, cy - 32, 84, 58, TFT_BLACK);
+  // Apaga o centro sem tocar o arco (raio interno = r - thick/2)
+  tft.fillCircle(cx, cy, r - thick / 2 - 2, TFT_BLACK);
 
   // Texto central
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -342,9 +344,9 @@ static int32_t moveTowards(int32_t value, int32_t target, float ratePerSecond, u
 static void engineProcess(unsigned long dtMs) {
   if (!engineOn) {
     // Desligamento gradual
-    rpm = (uint32_t)moveTowards((int32_t)rpm, 0, 2000.0f, dtMs);
-    tps = (uint8_t)moveTowards((int32_t)tps, 0, 400.0f, dtMs);
-    mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, 35, 80.0f, dtMs);
+    rpm = (uint32_t)moveTowards((int32_t)rpm, 0, 120.0f, dtMs);
+    tps = (uint8_t)moveTowards((int32_t)tps, 0, 60.0f, dtMs);
+    mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, 35, 18.0f, dtMs);
     fuelPwX100 = 0;
     lambdaX100 = 100;
     engineTempTimer = 0.0f;
@@ -355,7 +357,7 @@ static void engineProcess(unsigned long dtMs) {
 
   // TPS: acelera e solta devagar (pedal eletronico)
   const uint8_t targetTps = btnAccelHeld ? (uint8_t)85 : (uint8_t)8;
-  tps = (uint8_t)moveTowards((int32_t)tps, targetTps, 250.0f, dtMs);
+  tps = (uint8_t)moveTowards((int32_t)tps, targetTps, 45.0f, dtMs);
 
   // IAT: segue ambiente + influencia leve de carga
   int16_t targetIat;
@@ -366,7 +368,7 @@ static void engineProcess(unsigned long dtMs) {
   } else {
     targetIat = (int16_t)(kAmbientIatC + tps / 12);
   }
-  iatC = (int16_t)moveTowards((int32_t)iatC, targetIat, 8.0f, dtMs);
+  iatC = (int16_t)moveTowards((int32_t)iatC, targetIat, 5.0f, dtMs);
 
   // CLT: aquece com o tempo desde ligado, a menos que modo frio/quente force
   int16_t targetClt;
@@ -375,19 +377,19 @@ static void engineProcess(unsigned long dtMs) {
   } else if (hotMode) {
     targetClt = kHotCltC;
   } else {
-    // Aquece de ambiente ate normal em ~90 s
-    const float tempFactor = engineTempTimer / 90.0f;
+    // Aquece de ambiente ate normal em ~120 s
+    const float tempFactor = engineTempTimer / 120.0f;
     if (tempFactor >= 1.0f) {
       targetClt = kNormalCltC;
     } else {
       targetClt = (int16_t)(kAmbientCltC + (kNormalCltC - kAmbientCltC) * tempFactor);
     }
   }
-  cltC = (int16_t)moveTowards((int32_t)cltC, targetClt, 2.5f, dtMs);
+  cltC = (int16_t)moveTowards((int32_t)cltC, targetClt, 1.2f, dtMs);
 
   // MAP: segue TPS com um pequeno atraso (corpo de borboleta + admissao)
   const uint16_t targetMap = (uint16_t)(32 + (tps * 68) / 100);
-  mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, targetMap, 120.0f, dtMs);
+  mapKpa = (uint16_t)moveTowards((int32_t)mapKpa, targetMap, 22.0f, dtMs);
 
   // Lambda: rico na aceleracao, pobre na solta, estavel no marcha-lenta
   if (tps > 35) {
@@ -401,16 +403,16 @@ static void engineProcess(unsigned long dtMs) {
   // RPM: tem inercia e depende do TPS
   uint32_t targetRpm = kIdleRpm + (tps * (kMaxRpm - kIdleRpm)) / 100;
   // Partida: quando acabou de ligar, nao salta direto para marcha-lenta
-  if (engineTempTimer < 1.2f) {
-    const uint32_t crankRpm = 280;
-    const uint32_t catchRpm = (uint32_t)(crankRpm + (kIdleRpm - crankRpm) * (engineTempTimer / 1.2f));
+  if (engineTempTimer < 1.6f) {
+    const uint32_t crankRpm = 200;
+    const uint32_t catchRpm = (uint32_t)(crankRpm + (kIdleRpm - crankRpm) * (engineTempTimer / 1.6f));
     targetRpm = (targetRpm < catchRpm) ? targetRpm : catchRpm;
   }
   // Limitador de seguranca em 6000 rpm
   if (limiterOn && targetRpm > kRpmLimit) {
     targetRpm = kRpmLimit;
   }
-  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 450.0f, dtMs);
+  rpm = (uint32_t)moveTowards((int32_t)rpm, (int32_t)targetRpm, 80.0f, dtMs);
 
   // Protecao: se superaquecer ou limitador ativo, zera combustivel
   bool cutFuel = (cltC >= kCltLimitC) || (limiterOn && rpm >= kRpmLimit);
