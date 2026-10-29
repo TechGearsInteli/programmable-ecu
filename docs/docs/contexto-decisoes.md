@@ -6,6 +6,8 @@ sidebar_position: 0
 
 # Contexto das decisões
 
+<div style={{textAlign: 'justify'}}>
+
 Este texto é da equipe. Existe para ser lido e compartilhado no repositório, não para ficar na conversa de uma pessoa só. As decisões daqui foram tomadas pelo Eduardo em **29 de outubro de 2026**, depois do mapeamento, para o time partir do mesmo lugar. Não é especificação fechada e não é contrato.
 
 O que está aqui é o que o Eduardo fechou **agora**, com o que já sabemos. Peça, firmware, carro, ordem das tasks e até uma feature inteira podem mudar quando o projeto andar: mesa, pinagem do Fit, laboratório, dinheiro ou uma conversa da equipe. Decisão nova entra neste arquivo **com a equipe ciente**: alguém combina com o time, atualiza este texto e ajusta as issues que dependem dele. Não se trata uma frase daqui como lei só porque está escrita, e não se muda o recorte no código ou no carro sem essa atualização.
@@ -86,3 +88,5 @@ A feature 1.3 (estudo de hardware) não foi reaberta.
 ## Como mudar
 
 Se um ensaio, uma pinagem ou uma conversa mostrar que um item daqui está errado, a equipe combina o novo recorte, atualiza este arquivo e ajusta as issues que dependem dele. A atualização fica no repositório, visível para quem for ler depois. Mudança calada no código ou no carro, sem o time ciente e sem este texto atualizado, não vale.
+
+</div>
