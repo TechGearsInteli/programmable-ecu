@@ -8,15 +8,23 @@ sidebar_position: 0
 
 <div style={{textAlign: 'justify'}}>
 
-Este texto é da equipe. Existe para ser lido e compartilhado no repositório, não para ficar na conversa de uma pessoa só. As decisões daqui foram tomadas pelo Eduardo em **29 de outubro de 2026**, depois do mapeamento, para o time partir do mesmo lugar. Não é especificação fechada e não é contrato.
+Este texto é da equipe. Existe para ser lido e compartilhado no repositório, não para ficar na conversa de uma pessoa só. As decisões daqui foram tomadas pelo Eduardo em **29 de outubro de 2026**, depois do mapeamento, para o time partir do mesmo lugar. Em **11 de novembro de 2026** entrou o que mudou na prática: quem faz o quê, e que a caixa dos bicos não é uma placa Speeduino. Não é especificação fechada e não é contrato.
 
 O que está aqui é o que o Eduardo fechou **agora**, com o que já sabemos. Peça, firmware, carro, ordem das tasks e até uma feature inteira podem mudar quando o projeto andar: mesa, pinagem do Fit, laboratório, dinheiro ou uma conversa da equipe. Decisão nova entra neste arquivo **com a equipe ciente**: alguém combina com o time, atualiza este texto e ajusta as issues que dependem dele. Não se trata uma frase daqui como lei só porque está escrita, e não se muda o recorte no código ou no carro sem essa atualização.
 
-As issues no GitHub (`TechGearsInteli/programmable-ecu`, features 1.4 a 1.10) foram reescritas para bater com este recorte. O quadro DevGears pode ainda não mostrar as issues novas (#179 a #191): elas existem no repositório.
+As issues no GitHub (`TechGearsInteli/programmable-ecu`, features 1.4 a 1.10) foram reescritas para bater com este recorte. O quadro DevGears se atualiza à mão. As issues #179 a #191 existem no repositório e podem ainda não estar no quadro. Card marcado como concluído na 1.4 ou na 1.5 não significa que o hardware ou o firmware deste recorte já foi entregue.
 
 ## Em uma frase
 
 Tiramos a central Honda do Fit da liga, encaixamos a nossa no mesmo plugue, e só fazemos isso depois que o programa já funcionar na mesa.
+
+## Quem faz o quê agora
+
+Divisão de 11 de novembro de 2026. Muda se a equipe combinar de novo.
+
+- Eduardo: o carro (foto dos plugues, pinos, cabo até a nossa caixa) e as compras.
+- Lucas: o protótipo na mesa e o programa do motor.
+- Celso: a tela no computador e, depois, as telas de remap.
 
 ## O que a equipe já pode tratar como combinado
 
@@ -24,7 +32,7 @@ Estas são decisões de trabalho, não verdades eternas.
 
 **Duas placas.** Um ESP32 sem tela é o computador do motor: lê sensores e, na hora, manda injeção, ignição e relé. Um ESP32-S3 com tela de cerca de 4,3 polegadas, touch capacitivo, é só a interface. Os dois se falam por UART. Fio de sensor, bico ou bobina não vai para o S3. Nextion não entra. STM32 no motor só entra se o teste de capacidade do ESP reprovar.
 
-**Firmware nosso.** O programa é da TechGears. Speeduino e FuelTech são referência de elétrica e de produto (tela na ECU, mapa em tabela, relé de bomba). Não copiamos o firmware deles. Se comprarmos uma placa estilo Speeduino, ela é estágio de potência, não o cérebro.
+**Firmware nosso.** O programa é da TechGears. Speeduino e FuelTech são referência de elétrica e de produto (tela na ECU, mapa em tabela, relé de bomba). Não copiamos o firmware deles. O cérebro é o nosso ESP. Não compramos placa Speeduino para fazer o papel de cérebro nem de caixa de potência.
 
 **Carro.** A integração no veículo é o Fit da liga. O Gol G3 AP 1.6 (IAW 1AVP) fica como referência de motor que já conhecemos. O chicote do Gol não se corta. O Gol não é o carro em que vamos plugar.
 
@@ -32,9 +40,9 @@ Estas são decisões de trabalho, não verdades eternas.
 
 **Sem fase de só escutar.** Não vamos passar uma etapa obrigatória só lendo os fios com a original no comando. Mesa primeiro. No carro, a nossa ECU assume.
 
-**Mesa antes do carro.** “Firmware bom” significa: na bancada o ESP acompanha um gerador de roda fônica sem perder dente, o cálculo de tempo de bico e de avanço faz sentido, e uma lâmpada no lugar do bico pisca no tempo certo. Sem isso o Fit não entra.
+**Mesa antes do carro.** "Firmware bom" significa: na bancada o ESP acompanha um gerador de roda fônica sem perder dente, o cálculo de tempo de bico e de avanço faz sentido, e uma lâmpada no lugar do bico pisca no tempo certo. Sem isso o Fit não entra.
 
-**Potência.** O ESP manda 3,3 V. Bico e faísca passam por driver (MOSFET e estágio de ignição). Relé só para o que liga e fica ligado, em especial a bomba e a ventoinha. Relé não pulsa injetor nem vela. PCB própria e esquemático completo da ECU no EasyEDA não são esta etapa: o estágio de potência se compra.
+**Potência.** O ESP manda 3,3 V. Cada bico usa um MOSFET que liga com 3,3 V no gate. A ignição não se compra enquanto não soubermos se a bobina Honda já tem módulo (aí é pulso de 5 V) ou se é bobina sem módulo (aí é outro driver). Relé só para o que liga e fica ligado, em especial a bomba e a ventoinha. Relé não pulsa injetor nem vela. Na mesa, uma lâmpada prova o pulso antes de bico de verdade. PCB própria e esquemático completo da ECU no EasyEDA não são esta etapa.
 
 **Cuidado com peça cara.** O S3 e o MOSFET queimam com 12 V no pino errado, polaridade invertida, hot-plug e gate sem proteção. A primeira energização tem fusível, ordem escrita e lâmpada antes de bico de verdade. O desenho da tela passa por simulador LVGL no computador antes de gravar no S3. Simulador não substitui o teste de giro no ESP.
 
@@ -54,7 +62,7 @@ Dá para trazer de volta numa conversa. Hoje não está no caminho:
 - uma etapa só de escuta no carro;
 - cortar o chicote do Fit ou do Gol;
 - uma placa só fazendo motor, tela e Wi-Fi;
-- lambda em malha fechada como forma de “aprender o mapa sozinho”;
+- lambda em malha fechada como forma de "aprender o mapa sozinho";
 - PCB fabricada no laboratório como primeira entrega de hardware;
 - turbo, nitro, controle de tração, datalog de centenas de canais, tunagem remota.
 
@@ -62,12 +70,12 @@ Dá para trazer de volta numa conversa. Hoje não está no caminho:
 
 Não é indecisão de arquitetura. É medida que ainda não temos:
 
-- ano, motor e câmbio do Fit no documento (o “1.6” informado para Fit no Brasil não fecha; o mercado é 1.4 ou 1.5);
+- ano, motor e câmbio do Fit no documento (o "1.6" informado para Fit no Brasil não fecha; o mercado é 1.4 ou 1.5);
 - foto do conector colado na ECU Honda e a pinagem;
 - se o sensor de giro é indutivo ou Hall, e o desenho da roda fônica;
 - se o imobilizador impede a partida sem a Honda;
 - o que o laboratório do Inteli já tem (fonte, fusível, analisador, osciloscópio);
-- modelo exato da tela S3 e da placa de potência, com preço, na hora da compra;
+- modelo exato da tela S3 e o código do MOSFET, com preço, na hora da compra;
 - autorização da liga para tirar a central do Fit.
 
 Enquanto isso, o firmware de mesa não espera o plugue.
