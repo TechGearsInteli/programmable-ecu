@@ -65,7 +65,7 @@ python tools/host_build.py --docker # tudo num container Linux
 ```
 
 Firmwares: `pio run` dentro de `src/firmware/hmi/s3` ou `src/firmware/motor-bench` ([PlatformIO](https://platformio.org/)).
-Detalhes em `docs/docs/protocolo-uart.md`, `docs/docs/nucleo-calibracao.md` e `docs/docs/hmi-s3.md`.
+Passo a passo completo em `docs/docs/tutorial-hmi.md`. Detalhes em `docs/docs/protocolo-uart.md`, `docs/docs/nucleo-calibracao.md` e `docs/docs/hmi-s3.md`.
 
 ## Pipelines de CI
 
