@@ -7,6 +7,8 @@
                                           ...e gera as capturas de tela em PNG
     python tools/host_build.py --docker   faz tudo num container Linux (Docker), sem
                                           compilador no Windows (sem a janela interativa)
+    python tools/host_build.py --docker --cenarios
+                                          ...e mostra, linha a linha, as verificacoes de tela
 
 Precisa de CMake, Ninja e um compilador C. Se nao houver compilador no PATH,
 usa o Zig (um compilador C completo distribuido pelo PyPI, sem instalador):
@@ -83,6 +85,8 @@ def docker_build(args):
               " && cmake --build /src/build/linux")
     if not args.sem_testes:
         script += " && ctest --test-dir /src/build/linux --output-on-failure"
+    if args.cenarios:
+        script += " && /src/build/linux/hmi_sim --headless --cenario todos --saida /tmp/capturas"
     if args.capturas:
         script += " && /src/build/linux/hmi_sim --headless --cenario todos --saida /src/build/linux/capturas > /dev/null"
     env = dict(os.environ, MSYS_NO_PATHCONV="1")
@@ -99,6 +103,7 @@ def main():
     ap.add_argument("--sem-testes", action="store_true", help="so compila")
     ap.add_argument("--lvgl", metavar="PASTA", help="usa um LVGL 9.2.2 ja baixado (evita baixar de novo)")
     ap.add_argument("--docker", action="store_true", help="compila e testa num container Linux")
+    ap.add_argument("--cenarios", action="store_true", help="roda os cenarios de tela e mostra cada verificacao")
     args = ap.parse_args()
     if args.docker:
         docker_build(args)
@@ -125,6 +130,8 @@ def main():
         run([ctest, "--test-dir", BUILD, "--output-on-failure", "--repeat", "until-pass:3"], env)
 
     sim = BUILD / ("hmi_sim.exe" if os.name == "nt" else "hmi_sim")
+    if args.cenarios:
+        run([sim, "--headless", "--cenario", "todos", "--saida", BUILD / "capturas"], env)
     if args.capturas:
         out = Path(args.capturas).resolve()
         tmp = BUILD / "capturas"
