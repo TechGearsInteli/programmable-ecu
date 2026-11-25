@@ -2,3 +2,9 @@ docs-site/node_modules
 docs-site/build
 docs-site/.docusaurus
 .DS_Store
+
+# Build do computador (tools/host_build.py) e do PlatformIO
+build/
+.pio/
+src/firmware/**/.pio/
+hmi-sim-dados/
