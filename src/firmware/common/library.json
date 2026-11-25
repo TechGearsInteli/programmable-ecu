@@ -1,0 +1,15 @@
+{
+  "name": "ecu-core",
+  "version": "0.1.0",
+  "description": "Nucleo portatil da ECU TechGears: protocolo UART motor<->S3, mapas, calculo do Pulse Width, correcoes, ficha do motor e gravacao da calibracao. C99, sem Arduino.",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include"
+  },
+  "export": {
+    "exclude": ["test"]
+  }
+}
