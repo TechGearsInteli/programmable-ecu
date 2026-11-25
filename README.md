@@ -45,6 +45,28 @@ npm run start
 
 O site abre em `http://localhost:3000/programmable-ecu/`.
 
+## Firmware, tela e simulador (features 1.6 e 1.7)
+
+| Pasta | O que tem |
+|-------|-----------|
+| `src/firmware/common/` | Núcleo em C (protocolo UART, mapas, Pulse Width, correções, ficha, gravação) e testes Unity |
+| `src/firmware/hmi/ui/` | Telas LVGL 9.2.2 (800x480), as mesmas no simulador e na S3 |
+| `src/firmware/hmi/s3/` | Firmware da tela ESP32-S3 (PlatformIO) |
+| `src/firmware/motor-bench/` | Firmware de bancada do ESP do motor para testar a tela (PlatformIO) |
+| `src/software/hmi-sim/` | Simulador da tela no PC com motor virtual |
+
+Testes e simulador no computador (precisa de Python 3):
+
+```bash
+python -m pip install --user cmake ninja ziglang
+python tools/host_build.py          # compila e roda todos os testes
+python tools/host_build.py --sim    # abre o simulador (Windows)
+python tools/host_build.py --docker # tudo num container Linux
+```
+
+Firmwares: `pio run` dentro de `src/firmware/hmi/s3` ou `src/firmware/motor-bench` ([PlatformIO](https://platformio.org/)).
+Detalhes em `docs/docs/protocolo-uart.md`, `docs/docs/nucleo-calibracao.md` e `docs/docs/hmi-s3.md`.
+
 ## Pipelines de CI
 
 | Workflow | Gatilho | O que faz |
