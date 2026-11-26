@@ -67,6 +67,10 @@ python tools/host_build.py --docker # tudo num container Linux
 Firmwares: `pio run` dentro de `src/firmware/hmi/s3` ou `src/firmware/motor-bench` ([PlatformIO](https://platformio.org/)).
 Passo a passo completo em `docs/docs/tutorial-hmi.md`. Detalhes em `docs/docs/protocolo-uart.md`, `docs/docs/nucleo-calibracao.md` e `docs/docs/hmi-s3.md`.
 
+## Referências de contexto e gestão
+
+`docs/refs/` reúne o contexto para quem chega no time, ou para um agente via `CLAUDE.md`, pegar uma task nova: os fundamentos do projeto, a gestão (time, board, fluxo de PR e pendências), o documento, os slides e o vídeo da HMI S3. Comece por `docs/refs/README.md`.
+
 ## Pipelines de CI
 
 | Workflow | Gatilho | O que faz |
