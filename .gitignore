@@ -2,3 +2,7 @@ docs-site/node_modules
 docs-site/build
 docs-site/.docusaurus
 .DS_Store
+
+# Executaveis dos testes de firmware no computador
+src/firmware/test/*.exe
+src/firmware/test/test_table

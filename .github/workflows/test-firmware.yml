@@ -1,0 +1,20 @@
+name: Test Firmware
+
+on:
+  pull_request:
+    paths:
+      - 'src/firmware/**'
+      - '.github/workflows/test-firmware.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/firmware/**'
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run host unit tests
+        run: make -C src/firmware/test
