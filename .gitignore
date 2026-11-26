@@ -6,3 +6,4 @@ docs-site/.docusaurus
 # Executaveis dos testes de firmware no computador
 src/firmware/test/*.exe
 src/firmware/test/test_table
+src/firmware/test/test_ignition
