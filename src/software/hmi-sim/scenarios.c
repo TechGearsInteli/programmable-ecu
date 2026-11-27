@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ecu/ecu_calib.h"
 #include "hmi/ui_internal.h"
 #include "sim.h"
 
@@ -75,11 +76,11 @@ static motor_virtual_t *motor(void)
 static void sc_painel(void)
 {
     printf("\n== Painel e conexao (1.7.1.1 / 1.7.1.2)\n");
-    motor_virtual_set(motor(), 900, 340, 2, 250);
+    motor_virtual_set(motor(), ECU_FIT_IDLE_RPM, 340, 2, 250);
     sim_run_ms(2000);
     CHECK(g_sim.link.connected, "a tela achou o ESP do motor (PING/PONG)");
     CHECK(ecu_hmi_link_synced(&g_sim.link), "a tela copiou as 7 tabelas e a ficha do motor");
-    CHECK(has(g_ui.p_rpm, "900"), "painel mostra 900 rpm (motor virtual em marcha lenta)");
+    CHECK(strcmp(lv_label_get_text(g_ui.p_rpm), "750") == 0, "painel mostra 750 rpm (marcha lenta do Fit)");
     CHECK(has(g_ui.p_val[4], "25,0"), "painel mostra a temperatura do motor (25,0 °C)");
     CHECK(!g_ui.alert_rpm && !g_ui.alert_clt && has(g_ui.p_alert_lbl, "Sem alertas"), "abaixo dos limites, o alerta fica apagado");
     shot("01_painel_marcha_lenta");
@@ -87,6 +88,12 @@ static void sc_painel(void)
     motor_virtual_set(motor(), 3000, 600, 30, 850);
     sim_run_ms(300);
     CHECK(has(g_ui.p_rpm, "3000"), "um dado novo do motor muda o número na tela (3000 rpm)");
+
+    motor_virtual_set(motor(), 6800, 980, 90, 880);
+    motor()->in.sync = false;
+    sim_run_ms(300);
+    CHECK(strcmp(lv_label_get_text(g_ui.p_rpm), "0") == 0, "sem sincronismo o giro mostra 0, sem ficar no ultimo valor");
+    CHECK(!g_ui.alert_rpm, "giro sem sincronismo nao acende alerta de rotacao");
 }
 
 static void sc_alertas(void)

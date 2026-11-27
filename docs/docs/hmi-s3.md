@@ -43,7 +43,7 @@ Fonte: elaborado pelos autores.
 
 ![Painel em marcha lenta no simulador](./img/hmi/01_painel_marcha_lenta.png)
 
-<small><strong>Figura 1 - Painel com o motor virtual em marcha lenta (900 rpm, 25 °C)</strong></small>
+<small><strong>Figura 1 - Painel com o motor virtual em marcha lenta (750 rpm, 25 °C)</strong></small>
 
 Fonte: captura do simulador (`hmi_sim --headless`), elaborada pelos autores.
 

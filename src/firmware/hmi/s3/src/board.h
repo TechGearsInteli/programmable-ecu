@@ -1,9 +1,10 @@
 /**
- * Camada da placa: tudo o que muda se a equipe comprar outra tela S3.
+ * Camada da placa: o que muda depois que a equipe comprar a tela S3.
  *
- * Valores da Sunton ESP32-8048S043C (800x480, GT911), tirados da documentacao
- * publica da placa. NAO VALIDADO EM HARDWARE: confira cada pino no esquematico
- * da placa comprada antes de gravar.
+ * O desenho da interface fica em 800x480, tamanho padrao das telas de 4,3"
+ * com ESP32-S3. Esta Sunton ESP32-8048S043C NAO e a placa comprada: e so um
+ * exemplo, com pinos tirados da documentacao publica e sem teste em hardware.
+ * Na placa real mudam os pinos e o driver. O desenho das telas fica igual.
  */
 #pragma once
 

@@ -31,6 +31,13 @@ extern "C" {
 #define ECU_MAP_COLS 16u
 #define ECU_CURVE_POINTS 8u
 
+/* Fit 1.5 L15A (EX 2006). A lenta vem do manual Honda. O corte vem de notas
+ * Haltech para esse motor: forte, mas nao e o manual. A faixa vermelha do
+ * painel e o fundo da escala esperam uma foto do conta-giros; nao usar o
+ * corte como vermelho nem como fim da barra. */
+#define ECU_FIT_IDLE_RPM 750
+#define ECU_FIT_REV_CUT_RPM 6200
+
 typedef enum {
     ECU_TBL_FUEL = 0,
     ECU_TBL_IGN = 1,

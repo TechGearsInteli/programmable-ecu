@@ -102,7 +102,7 @@ Seis telas em 800×480, as mesmas no simulador e na placa, com acentos via uma f
 
 As capturas abaixo saem dos cenários de teste do simulador.
 
-![Painel em marcha lenta: 900 rpm, tempo de injeção, avanço e temperaturas](../docs/img/hmi/01_painel_marcha_lenta.png)
+![Painel em marcha lenta: 750 rpm, tempo de injeção, avanço e temperaturas](../docs/img/hmi/01_painel_marcha_lenta.png)
 
 ![Célula editada e confirmada pelo ESP do motor; o PW subiu de 6466 para 6664 µs](../docs/img/hmi/06_combustivel_confirmado.png)
 

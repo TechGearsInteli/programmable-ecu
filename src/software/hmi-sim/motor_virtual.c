@@ -1,5 +1,7 @@
 #include "motor_virtual.h"
 
+#include "ecu/ecu_calib.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -93,20 +95,20 @@ static void auto_cycle(motor_virtual_t *m, uint32_t now)
         rpm = ramp(0, 280, t, 0, 600);
         map = 950;
         tps = 0;
-    } else if (t < 8000) { /* marcha lenta */
-        rpm = 900 + (int32_t)((t / 97) % 30);
+    } else if (t < 8000) { /* marcha lenta, firme: manual Honda do L15A */
+        rpm = ECU_FIT_IDLE_RPM;
         map = 340;
         tps = 2;
     } else if (t < 14000) { /* aceleracao forte */
-        rpm = ramp(900, 6000, t, 8000, 14000);
+        rpm = ramp(ECU_FIT_IDLE_RPM, 6000, t, 8000, 14000);
         map = ramp(450, 960, t, 8000, 9000);
         tps = t < 8300 ? ramp(2, 85, t, 8000, 8300) : 85;
-    } else if (t < 17000) { /* passa do limite de rotacao */
-        rpm = ramp(6000, 6900, t, 14000, 16000);
+    } else if (t < 17000) { /* chega no corte do L15A; nao passa dele */
+        rpm = ramp(6000, ECU_FIT_REV_CUT_RPM, t, 14000, 16000);
         map = 980;
         tps = 90;
     } else if (t < 22000) { /* tira o pe: desaceleracao */
-        rpm = ramp(6900, 2200, t, 17000, 22000);
+        rpm = ramp(ECU_FIT_REV_CUT_RPM, 2200, t, 17000, 22000);
         map = 240;
         tps = 0;
     } else { /* cruzeiro: 2500 rpm e 60 kPa */

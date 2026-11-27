@@ -84,13 +84,16 @@ void hmi_painel_refresh(void)
     const bool have_limits = l->params[ECU_PAR_ALERT_RPM].ok && l->params[ECU_PAR_ALERT_CLT_X10].ok;
     const int32_t lim_rpm = l->params[ECU_PAR_ALERT_RPM].p.value;
     const int32_t lim_clt = l->params[ECU_PAR_ALERT_CLT_X10].p.value;
-    g_ui.alert_rpm = alive && have_limits && t->rpm > lim_rpm;
+    /* Sem sincronismo o pacote pode trazer o ultimo giro. Nao usar esse numero. */
+    const bool rpm_trusted = (t->flags & (ECU_TLM_SYNC | ECU_TLM_CRANKING)) != 0;
+    const uint16_t rpm_show = rpm_trusted ? t->rpm : 0;
+    g_ui.alert_rpm = alive && rpm_trusted && have_limits && t->rpm > lim_rpm;
     g_ui.alert_clt = alive && have_limits && t->clt_x10 > lim_clt;
 
     if (g_ui.alert_rpm || g_ui.alert_clt) {
         char r[80] = "", k[80] = "";
         if (g_ui.alert_rpm) {
-            snprintf(r, sizeof(r), "Rotação acima do limite (%u > %ld rpm)", t->rpm, (long)lim_rpm);
+            snprintf(r, sizeof(r), "Rotação acima do limite (%u > %ld rpm)", rpm_show, (long)lim_rpm);
         }
         if (g_ui.alert_clt) {
             hmi_fmt_with_unit(a, sizeof(a), ECU_UNIT_DEGC_X10, t->clt_x10, false);
@@ -123,10 +126,10 @@ void hmi_painel_refresh(void)
         return;
     }
 
-    lv_label_set_text_fmt(g_ui.p_rpm, "%u", t->rpm);
+    lv_label_set_text_fmt(g_ui.p_rpm, "%u", rpm_show);
     lv_obj_align_to(rpm_unit, g_ui.p_rpm, LV_ALIGN_OUT_RIGHT_BOTTOM, 10, -8);
     lv_obj_set_style_text_color(g_ui.p_rpm, g_ui.alert_rpm ? HMI_C_DANGER : HMI_C_TEXT, 0);
-    lv_bar_set_value(g_ui.p_rpm_bar, t->rpm > RPM_MAX ? RPM_MAX : t->rpm, LV_ANIM_OFF);
+    lv_bar_set_value(g_ui.p_rpm_bar, rpm_show > RPM_MAX ? RPM_MAX : rpm_show, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(g_ui.p_rpm_bar, g_ui.alert_rpm ? HMI_C_DANGER : HMI_C_ACCENT, LV_PART_INDICATOR);
     if (t->flags & ECU_TLM_CRANKING) {
         lv_label_set_text(g_ui.p_sync, LV_SYMBOL_REFRESH " Partida");
