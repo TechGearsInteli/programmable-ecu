@@ -1,0 +1,13 @@
+{
+  "name": "hmi-ui",
+  "version": "0.1.0",
+  "description": "Telas da HMI da ECU (LVGL 9.2.2, 800x480): painel, alertas, mapas, correcoes, ficha do motor e gravacao. As mesmas no simulador e no ESP32-S3.",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include",
+    "srcFilter": ["+<*.c>", "+<fonts/*.c>"]
+  }
+}
